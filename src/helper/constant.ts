@@ -1,1 +1,1 @@
-export const baseUrl = `http://${window.location.hostname}:8000`
+export const baseUrl = `https://pingspace-backend.onrender.com`
