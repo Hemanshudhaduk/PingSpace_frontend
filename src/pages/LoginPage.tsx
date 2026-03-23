@@ -1,6 +1,6 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuthStore } from '../store/authStore';
+import { getToken, useAuthStore } from '../store/authStore';
 import { baseUrl } from '../helper/constant';
 
 export default function LoginPage() {
@@ -17,6 +17,8 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
+
+
 
     try {
       // /login uses OAuth2 form encoding (application/x-www-form-urlencoded)
@@ -49,6 +51,12 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+  // console.log(getToken())
+  useEffect(() => {
+    if (getToken()) {
+      navigate('/chat');
+    }
+  }, []);
 
   return (
     <div className="login-page">
