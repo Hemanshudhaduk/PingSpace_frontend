@@ -16,7 +16,7 @@ export default function ChatLayout() {
   const logout = useAuthStore((s) => s.logout);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
   const theme = useThemeStore((s) => s.theme);
-  
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [message, setMessage] = useState("");
@@ -31,13 +31,13 @@ export default function ChatLayout() {
   type TokenPayload = { sub: string; username: string };
   let username: string | undefined = undefined;
   let currentUserId: string = "";
-  
+
   if (token) {
     const jwt_token = jwtDecode<TokenPayload>(token);
     username = jwt_token.username;
     currentUserId = jwt_token.sub;
   }
-  
+
   const ws = useRef<WebSocket | null>(null);
 
   const activeServer = server.find((s) => s.id === activeServerId);
@@ -63,7 +63,7 @@ export default function ChatLayout() {
 
   useEffect(() => {
     if (!username || !room || !activeServerId) return;
-    
+
     // clean up any existing connection
     ws.current?.close();
 
@@ -88,7 +88,7 @@ export default function ChatLayout() {
     ws.current.onclose = () => console.log("WebSocket closed");
 
     return () => ws.current?.close();
-  }, [room, username, activeServerId]);
+  }, [room, username, roomID, activeServerId]);
 
   const selectedRoom = (roomName: string, id: any) => {
     setRoomID(id);
