@@ -56,57 +56,41 @@ const JoinPage = () => {
       setLoading(true);
       setError(null);
 
-      // Check if the sender is the admin
-      const serverRes = await fetch(`${baseUrl}/servers/${serverId}`, options("GET", token));
-      if (!serverRes.ok) throw new Error("Failed to fetch server details");
-      const serverData = await serverRes.json();
-      const isAdminInvite = senderUserId === serverData.admin_id;
+      // Always send join request, backend will auto-approve if sender is admin
+      const payload = {
+        server_id: serverId,
+        sender_user_id: senderUserId
+      };
 
-      if (isAdminInvite) {
-        // Direct join
-        const joinRes = await fetch(`${baseUrl}/servers/${serverId}/join`, options("POST", token, { user_id: userId }));
-        if (!joinRes.ok) {
-          const errorData = await joinRes.json().catch(() => ({}));
-          throw new Error(errorData.detail || errorData.message || "Failed to join server");
-        }
-        setSuccess(true);
-        setTimeout(() => navigate("/chat"), 1500);
-      } else {
-        // Send join request
-        const payload = {
-          server_id: serverId
-        };
+      const response = await fetch(
+        `${baseUrl}/join_requests`,
+        options("POST", token, payload)
+      );
 
-        const response = await fetch(
-          `${baseUrl}/join_requests`,
-          options("POST", token, payload)
-        );
+      // ❌ Handle expired token from backend (IMPORTANT)
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        setError("Session expired. Please login again.");
+        navigate("/");
+        return;
+      }
 
-        // ❌ Handle expired token from backend (IMPORTANT)
-        if (response.status === 401) {
-          localStorage.removeItem("token");
-          setError("Session expired. Please login again.");
-          navigate("/");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+
+        if (response.status === 400 || response.status === 409) {
+          setSuccess(true);
+          setTimeout(() => navigate("/chat"), 1500);
           return;
         }
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-
-          if (response.status === 400 || response.status === 409) {
-            setSuccess(true);
-            setTimeout(() => navigate("/chat"), 1500);
-            return;
-          }
-
-          throw new Error(
-            errorData.detail || errorData.message || "Failed to join server"
-          );
-        }
-
-        setSuccess(true);
-        setTimeout(() => navigate("/chat"), 1500);
+        throw new Error(
+          errorData.detail || errorData.message || "Failed to join server"
+        );
       }
+
+      setSuccess(true);
+      setTimeout(() => navigate("/chat"), 1500);
 
     } catch (err: unknown) {
       console.error("Error joining server:", err);
