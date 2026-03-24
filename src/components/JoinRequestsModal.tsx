@@ -39,7 +39,9 @@ export default function JoinRequestsModal({ serverId, onClose }: Props) {
                 const userData = await userRes.json();
                 username = userData.username;
               }
-            } catch (e) { }
+            } catch (e) { 
+              console.log(e)
+            }
             return { ...req, username };
           })
         );

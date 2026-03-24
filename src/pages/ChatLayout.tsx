@@ -1,5 +1,5 @@
 import { jwtDecode } from "jwt-decode";
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import EmojiPicker, { EmojiClickData, Theme } from "emoji-picker-react";
 import ChatHeader from "../components/ChatHeader";
 import ChatScreen from "../components/ChatScreen";
@@ -45,7 +45,7 @@ export default function ChatLayout() {
 
   useEffect(() => {
     const get_data = async () => {
-      if (!roomID || !activeServerId) return;
+      if (!roomID || !activeServerId || !token) return;
       try {
         const res = await fetch(
           `${baseUrl}/messages/${roomID}`,
@@ -59,10 +59,10 @@ export default function ChatLayout() {
       }
     };
     get_data();
-  }, [roomID, activeServerId]);
+  }, [roomID, activeServerId, token]);
 
   useEffect(() => {
-    if (!username || !room || !activeServerId) return;
+    if (!username || !room || !activeServerId || !token) return;
 
     // clean up any existing connection
     ws.current?.close();
@@ -88,15 +88,15 @@ export default function ChatLayout() {
     ws.current.onclose = () => console.log("WebSocket closed");
 
     return () => ws.current?.close();
-  }, [room, username, roomID, activeServerId]);
+  }, [room, username, roomID, activeServerId, token]);
 
-  const selectedRoom = (roomName: string, id: any) => {
+  const selectedRoom = (roomName: string, id: string) => {
     setRoomID(id);
     setRoom(roomName);
     setIsSidebarOpen(false);
   };
 
-  const getServer = async () => {
+  const getServer = useCallback(async () => {
     try {
       const url = `${baseUrl}/servers`;
       const res = await fetch(url, options("GET", token));
@@ -106,11 +106,11 @@ export default function ChatLayout() {
     } catch (e) {
       console.error("Failed to fetch servers:", e);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     getServer();
-  }, []);
+  }, [getServer]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
