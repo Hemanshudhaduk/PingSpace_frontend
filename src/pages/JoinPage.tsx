@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { getToken } from "../store/authStore";
+import { getToken, isTokenExpired } from "../store/authStore";
 import { jwtDecode } from "jwt-decode";
 import { baseUrl } from "../helper/constant";
 import { options } from "../helper/fetchOptions";
@@ -16,12 +16,25 @@ const JoinPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const serverId = searchParams.get("server");
+  const serverParam = searchParams.get("server");
+  const parts = serverParam ? serverParam.split("/") : [];
+  const serverId = parts[0] || "";
+  const inviteAdminId = parts.length > 1 ? parts[1] : undefined;
 
   const handleJoinServer = useCallback(async () => {
     const token = getToken();
+
+    // ❌ No token
     if (!token) {
       setError("You must be logged in to join a server.");
+      navigate("/");
+      return;
+    }
+
+    // ❌ Token expired (NEW LOGIC)
+    if (isTokenExpired(token)) {
+      localStorage.removeItem("token");
+      setError("Session expired. Please login again.");
       navigate("/");
       return;
     }
@@ -33,8 +46,7 @@ const JoinPage = () => {
 
     try {
       const decoded = jwtDecode<TokenPayload>(token);
-      const userId = decoded.sub; // Backend stores the ID in the "sub" field
-
+      const userId = decoded.sub || decoded.id;
 
       if (!userId) {
         setError("Invalid authentication token.");
@@ -44,44 +56,43 @@ const JoinPage = () => {
       setLoading(true);
       setError(null);
 
-      // Join the server (role: "member" for regular invites)
       const payload = {
-        user_id: userId,
-        server_id: serverId,
-        role: "member"
+        server_id: serverId
       };
-      
+
       const response = await fetch(
-        `${baseUrl}/server_users`,
+        `${baseUrl}/join_requests`,
         options("POST", token, payload)
       );
 
+      // ❌ Handle expired token from backend (IMPORTANT)
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        setError("Session expired. Please login again.");
+        navigate("/");
+        return;
+      }
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        
-        // Check if user is already a member
+
         if (response.status === 400 || response.status === 409) {
           setSuccess(true);
-          setTimeout(() => {
-            navigate("/chat");
-          }, 1500);
+          setTimeout(() => navigate("/chat"), 1500);
           return;
         }
 
-        throw new Error(errorData.detail || errorData.message || "Failed to join server");
+        throw new Error(
+          errorData.detail || errorData.message || "Failed to join server"
+        );
       }
 
-      const data = await response.json();
-      console.log("Joined server:", data);
       setSuccess(true);
-      
-      // Redirect to chat after a short delay
-      setTimeout(() => {
-        navigate("/chat");
-      }, 1500);
+      setTimeout(() => navigate("/chat"), 1500);
+
     } catch (err: any) {
       console.error("Error joining server:", err);
-      setError(err.message || "An error occurred while joining the server. Please try again.");
+      setError(err.message || "An error occurred while joining the server.");
       setLoading(false);
     }
   }, [serverId, navigate]);
@@ -89,7 +100,7 @@ const JoinPage = () => {
   useEffect(() => {
     // If not authenticated, redirect to login with return URL
     if (!isAuthenticated && !getToken()) {
-      navigate(`/?returnUrl=/join?server=${serverId || ""}`);
+      navigate(`/?returnUrl=/join?server=${serverParam || ""}`);
       return;
     }
 
@@ -99,11 +110,22 @@ const JoinPage = () => {
       return;
     }
 
-    // Auto-join if authenticated
-    if (isAuthenticated && serverId) {
-      handleJoinServer();
+    const token = getToken();
+    let currentUserId = "";
+    if (token) {
+      try {
+        currentUserId = jwtDecode<{ sub: string }>(token).sub || "";
+      } catch { }
     }
-  }, [isAuthenticated, serverId, navigate, handleJoinServer]);
+
+    // If the current user is the admin who created the invite, redirect directly to chat
+    if (currentUserId && inviteAdminId && currentUserId === inviteAdminId) {
+      navigate("/chat");
+      return;
+    }
+
+    // Removed auto-join so user can see the message before clicking join.
+  }, [isAuthenticated, serverId, serverParam, inviteAdminId, navigate]);
 
   if (!serverId) {
     return (
@@ -164,12 +186,12 @@ const JoinPage = () => {
           </div>
           <span className="login-brand-name">PingSpace</span>
         </div>
-        
+
         {success ? (
           <>
-            <h1 className="login-title">Success!</h1>
+            <h1 className="login-title">Request Sent!</h1>
             <p className="login-subtitle" style={{ color: "#ffffff", marginBottom: 8 }}>
-              You've successfully joined the server!
+              If the admin accepts the request, you can join the server.
             </p>
             <p className="login-subtitle">
               Redirecting to chat...
@@ -190,11 +212,11 @@ const JoinPage = () => {
           </>
         ) : loading ? (
           <>
-            <h1 className="login-title">Joining server...</h1>
+            <h1 className="login-title">Sending Request...</h1>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
               <span className="login-spinner" style={{ width: 16, height: 16 }} />
               <p className="login-subtitle" style={{ margin: 0 }}>
-                Please wait while we add you to the server.
+                Please wait while we send your request to the admin.
               </p>
             </div>
           </>
@@ -202,14 +224,14 @@ const JoinPage = () => {
           <>
             <h1 className="login-title">Join Server</h1>
             <p className="login-subtitle">
-              Click the button below to join this server.
+              If the admin accepts the request then after you can join this server.
             </p>
             <button
               onClick={handleJoinServer}
               className="login-btn su-btn"
               style={{ marginTop: "20px" }}
             >
-              Join Server
+              Request to Join
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
               </svg>

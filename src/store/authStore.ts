@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { jwtDecode } from "jwt-decode";
 
 type AuthState = {
   token: string | null
@@ -23,4 +24,13 @@ export const useAuthStore = create<AuthState>((set) => ({
 export const getToken = () => {
   return localStorage.getItem('token')
 }
+
+export const isTokenExpired = (token: string) => {
+  try {
+    const decoded: any = jwtDecode(token);
+    return decoded.exp * 1000 < Date.now();
+  } catch {
+    return true;
+  }
+};
 

@@ -7,6 +7,7 @@ import InputModal from "./InputModal";
 import ServerSettingsModal from "./ServerSettingsModal";
 import ChannelSettingsModal from "./ChannelSettingsModal";
 import { jwtDecode } from "jwt-decode";
+import JoinRequestsModal from "./JoinRequestsModal";
 
 type Room = { name: string; id: string | number };
 type Server = { name: string; id: string; admin_id: string };
@@ -35,8 +36,11 @@ export default function Sidebar({
   const [show, setShow] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [activeServerId, setActiveServerID] = useState<string | undefined>();
+  // const [serverAdminId, setserverAdminId] = useState<string | undefined>();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [showServerSettings, setShowServerSettings] = useState(false);
+  const [showJoinRequests, setShowJoinRequests] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const [settingsRoom, setSettingsRoom] = useState<Room | null>(null);
 
   const tokenString = getToken() || "";
@@ -45,7 +49,7 @@ export default function Sidebar({
     try {
       const decoded = jwtDecode<{ sub: string }>(tokenString);
       currentUserId = decoded.sub;
-    } catch {}
+    } catch { }
   }
 
   // Find the active server
@@ -71,7 +75,35 @@ export default function Sidebar({
 
   useEffect(() => {
     getRoom();
-  }, [activeServerId]);
+
+    // Auto-open join requests popup if there are new pending requests and current user is admin
+    let intervalId: any;
+    if (activeServerId && isAdmin) {
+      let lastCount = 0;
+      const checkRequests = () => {
+        fetch(`${baseUrl}/join_requests/${activeServerId}`, options("GET", tokenString))
+          .then((res) => res.json())
+          .then((data) => {
+            if (Array.isArray(data)) {
+              // If there are more requests than we last saw, open the popup!
+              if (data.length > lastCount) {
+                setShowJoinRequests(true);
+              }
+              lastCount = data.length;
+              setPendingCount(data.length);
+            }
+          })
+          .catch(console.error);
+      };
+
+      checkRequests();
+      intervalId = setInterval(checkRequests, 5000); // Check every 5 seconds
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [activeServerId, isAdmin, tokenString]);
 
   const handleSeverID = (serverID: string) => {
     if (serverID) setActiveServerID(serverID);
@@ -102,7 +134,7 @@ export default function Sidebar({
 
   const handleInvite = () => {
     if (!activeServerId) return;
-    const inviteLink = `${window.location.origin}/join?server=${activeServerId}`;
+    const inviteLink = `${window.location.origin}/join?server=${activeServerId}/${activeServer?.admin_id}`;
     navigator.clipboard
       .writeText(inviteLink)
       .then(() => {
@@ -131,6 +163,22 @@ export default function Sidebar({
               <>
                 <div className="brand">{activeServer.name}</div>
                 <div style={{ position: "relative", display: "flex", alignItems: "center", gap: "4px" }}>
+                  {isAdmin && (
+                    <button onClick={() => setShowJoinRequests(true)} className="invite-button" aria-label="Join Requests" title="Join Requests" style={{ position: "relative" }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                      </svg>
+                      {pendingCount > 0 && (
+                        <span style={{
+                          position: "absolute", top: -4, right: -4, background: "#ef4444", color: "#fff", 
+                          fontSize: 10, fontWeight: "bold", width: 16, height: 16, 
+                          borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center"
+                        }}>
+                          {pendingCount > 9 ? "9+" : pendingCount}
+                        </span>
+                      )}
+                    </button>
+                  )}
                   <button onClick={() => setShowServerSettings(true)} className="invite-button" aria-label="Server Settings" title="Server Settings">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="12" cy="12" r="3"></circle>
@@ -187,7 +235,7 @@ export default function Sidebar({
                   onMouseOver={(e) => (e.currentTarget.style.color = "var(--text)")}
                   onMouseOut={(e) => (e.currentTarget.style.color = "var(--muted)")}
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                 </button>
               )}
             </div>
@@ -214,8 +262,8 @@ export default function Sidebar({
                     <span className="channel-name">{room.name}</span>
                   </div>
                   {isAdmin && (
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); setSettingsRoom(room); }} 
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSettingsRoom(room); }}
                       title="Edit Channel"
                       style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer", padding: "4px", display: "flex", alignItems: "center", borderRadius: "4px" }}
                       onMouseOver={(e) => e.currentTarget.style.color = "var(--text)"}
@@ -272,6 +320,12 @@ export default function Sidebar({
               onSelectRoom("", ""); // Clear active room if we just deleted it
             }
           }}
+        />
+      )}
+      {showJoinRequests && activeServerId && (
+        <JoinRequestsModal
+          serverId={activeServerId}
+          onClose={() => setShowJoinRequests(false)}
         />
       )}
     </aside>

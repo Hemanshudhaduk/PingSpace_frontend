@@ -1,3 +1,5 @@
+import { isTokenExpired } from "../store/authStore";
+
 type HTTPMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
 
 export const options = (
@@ -6,6 +8,12 @@ export const options = (
   data: any | null = null,
   includeCredentials: boolean = false
 ): RequestInit => {
+  if (token && isTokenExpired(token)) {
+    localStorage.removeItem("token");
+    window.location.href = "/";
+    throw new Error("Session expired. Please login again.");
+  }
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
