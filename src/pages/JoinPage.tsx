@@ -19,7 +19,7 @@ const JoinPage = () => {
   const serverParam = searchParams.get("server");
   const parts = serverParam ? serverParam.split("/") : [];
   const serverId = parts[0] || "";
-  const inviteAdminId = parts.length > 1 ? parts[1] : undefined;
+  const senderUserId = parts.length > 1 ? parts[1] : undefined;
 
   const handleJoinServer = useCallback(async () => {
     const token = getToken();
@@ -56,46 +56,64 @@ const JoinPage = () => {
       setLoading(true);
       setError(null);
 
-      const payload = {
-        server_id: serverId
-      };
+      // Check if the sender is the admin
+      const serverRes = await fetch(`${baseUrl}/servers/${serverId}`, options("GET", token));
+      if (!serverRes.ok) throw new Error("Failed to fetch server details");
+      const serverData = await serverRes.json();
+      const isAdminInvite = senderUserId === serverData.admin_id;
 
-      const response = await fetch(
-        `${baseUrl}/join_requests`,
-        options("POST", token, payload)
-      );
+      if (isAdminInvite) {
+        // Direct join
+        const joinRes = await fetch(`${baseUrl}/servers/${serverId}/join`, options("POST", token, { user_id: userId }));
+        if (!joinRes.ok) {
+          const errorData = await joinRes.json().catch(() => ({}));
+          throw new Error(errorData.detail || errorData.message || "Failed to join server");
+        }
+        setSuccess(true);
+        setTimeout(() => navigate("/chat"), 1500);
+      } else {
+        // Send join request
+        const payload = {
+          server_id: serverId
+        };
 
-      // ❌ Handle expired token from backend (IMPORTANT)
-      if (response.status === 401) {
-        localStorage.removeItem("token");
-        setError("Session expired. Please login again.");
-        navigate("/");
-        return;
-      }
+        const response = await fetch(
+          `${baseUrl}/join_requests`,
+          options("POST", token, payload)
+        );
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-
-        if (response.status === 400 || response.status === 409) {
-          setSuccess(true);
-          setTimeout(() => navigate("/chat"), 1500);
+        // ❌ Handle expired token from backend (IMPORTANT)
+        if (response.status === 401) {
+          localStorage.removeItem("token");
+          setError("Session expired. Please login again.");
+          navigate("/");
           return;
         }
 
-        throw new Error(
-          errorData.detail || errorData.message || "Failed to join server"
-        );
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+
+          if (response.status === 400 || response.status === 409) {
+            setSuccess(true);
+            setTimeout(() => navigate("/chat"), 1500);
+            return;
+          }
+
+          throw new Error(
+            errorData.detail || errorData.message || "Failed to join server"
+          );
+        }
+
+        setSuccess(true);
+        setTimeout(() => navigate("/chat"), 1500);
       }
 
-      setSuccess(true);
-      setTimeout(() => navigate("/chat"), 1500);
-
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error joining server:", err);
-      setError(err.message || "An error occurred while joining the server.");
+      setError(err instanceof Error ? err.message : "An error occurred while joining the server.");
       setLoading(false);
     }
-  }, [serverId, navigate]);
+  }, [serverId, senderUserId, navigate]);
 
   useEffect(() => {
     // If not authenticated, redirect to login with return URL
@@ -110,22 +128,8 @@ const JoinPage = () => {
       return;
     }
 
-    const token = getToken();
-    let currentUserId = "";
-    if (token) {
-      try {
-        currentUserId = jwtDecode<{ sub: string }>(token).sub || "";
-      } catch { }
-    }
-
-    // If the current user is the admin who created the invite, redirect directly to chat
-    if (currentUserId && inviteAdminId && currentUserId === inviteAdminId) {
-      navigate("/chat");
-      return;
-    }
-
     // Removed auto-join so user can see the message before clicking join.
-  }, [isAuthenticated, serverId, serverParam, inviteAdminId, navigate]);
+  }, [isAuthenticated, serverId, serverParam, navigate]);
 
   if (!serverId) {
     return (

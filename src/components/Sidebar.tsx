@@ -134,7 +134,7 @@ export default function Sidebar({
 
   const handleInvite = () => {
     if (!activeServerId) return;
-    const inviteLink = `${window.location.origin}/join?server=${activeServerId}/${activeServer?.admin_id}`;
+    const inviteLink = `${window.location.origin}/join?server=${activeServerId}/${currentUserId}`;
     navigator.clipboard
       .writeText(inviteLink)
       .then(() => {
