@@ -15,6 +15,10 @@ if (typeof document !== "undefined") {
   document.documentElement.setAttribute("data-theme", savedTheme);
 }
 
+setInterval(() => {
+  fetch(`${import.meta.env.VITE_BASE_URL}/health`).catch(() => {});
+}, 10 * 60 * 1000);
+
 const router = createBrowserRouter([
   { path: "/", element: <LoginPage /> },
   { path: "/signup", element: <SignUpPage /> },

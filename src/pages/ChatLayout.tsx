@@ -1,5 +1,12 @@
 import { jwtDecode } from "jwt-decode";
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useMemo,
+  type KeyboardEvent,
+} from "react";
 import EmojiPicker, { EmojiClickData, Theme } from "emoji-picker-react";
 import ChatHeader from "../components/ChatHeader";
 import ChatScreen from "../components/ChatScreen";
@@ -10,7 +17,12 @@ import { useAuthStore } from "../store/authStore";
 import { useThemeStore } from "../store/themeStore";
 
 type Server = { id: string; name: string; admin_id: string };
-type ChatMessage = { id?: string; sender: string; content: string; created_at?: string };
+type ChatMessage = {
+  id?: string;
+  sender: string;
+  content: string;
+  created_at?: string;
+};
 
 export default function ChatLayout() {
   const logout = useAuthStore((s) => s.logout);
@@ -20,7 +32,7 @@ export default function ChatLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [message, setMessage] = useState("");
-  const [roomID, setRoomID] = useState<string>();
+  const [roomID, setRoomID] = useState<string | number>();
   const [server, setServer] = useState<Server[]>([]);
   const [activeServerId, setActiveServerId] = useState<string>("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -28,78 +40,68 @@ export default function ChatLayout() {
   const [room, setRoom] = useState("");
 
   const token = localStorage.getItem("token");
-  type TokenPayload = { sub: string; username: string };
-  let username: string | undefined = undefined;
-  let currentUserId: string = "";
 
-  if (token) {
-    const jwt_token = jwtDecode<TokenPayload>(token);
-    username = jwt_token.username;
-    currentUserId = jwt_token.sub;
-  }
+  // Decode JWT once
+  const { username, currentUserId } = useMemo(() => {
+    if (!token) return { username: undefined, currentUserId: "" };
+    try {
+      const decoded = jwtDecode<{ sub: string; username: string }>(token);
+      return { username: decoded.username, currentUserId: decoded.sub };
+    } catch {
+      return { username: undefined, currentUserId: "" };
+    }
+  }, [token]);
 
   const ws = useRef<WebSocket | null>(null);
 
   const activeServer = server.find((s) => s.id === activeServerId);
   const isAdmin = activeServer?.admin_id === currentUserId;
 
+  // Fetch message history when room changes
   useEffect(() => {
-    const get_data = async () => {
-      if (!roomID || !activeServerId || !token) return;
-      try {
-        const res = await fetch(
-          `${baseUrl}/messages/${roomID}`,
-          options("GET", token)
-        );
-        if (!res.ok) return;
-        const data = await res.json();
-        setChat(Array.isArray(data) ? data : []);
-      } catch (error) {
-        console.error("History fetch error:", error);
-      }
-    };
-    get_data();
+    if (!roomID || !activeServerId || !token) return;
+    fetch(`${baseUrl}/messages/${roomID}`, options("GET", token))
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setChat(Array.isArray(data) ? data : []))
+      .catch((err) => console.error("History fetch error:", err));
   }, [roomID, activeServerId, token]);
 
+  // WebSocket connection
   useEffect(() => {
     if (!username || !room || !activeServerId || !token) return;
 
-    // clean up any existing connection
     ws.current?.close();
-
     const wsUrl = baseUrl.replace(/^http/, "ws");
-    ws.current = new WebSocket(
-      `${wsUrl}/ws/${roomID}?token=${token}`
-    );
+    ws.current = new WebSocket(`${wsUrl}/ws/${roomID}?token=${token}`);
 
-    ws.current.onopen = () => console.log("WebSocket connected");
     ws.current.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
-        const new_obj = { id: payload.id, sender: payload.sender, content: payload.content, created_at: new Date().toISOString() };
-        setChat((prev) => [...prev, new_obj]);
-        // Note: Real apps would get created_at from backend payload
-      } catch (e) {
-        const new_obj = { sender: "System", content: String(event.data) };
-        setChat((prev) => [...prev, new_obj]);
+        setChat((prev) => [...prev, {
+          id: payload.id,
+          sender: payload.sender,
+          content: payload.content,
+          created_at: new Date().toISOString(),
+        }]);
+      } catch {
+        setChat((prev) => [...prev, { sender: "System", content: String(event.data) }]);
       }
     };
     ws.current.onerror = (error) => console.error("WebSocket error:", error);
-    ws.current.onclose = () => console.log("WebSocket closed");
 
     return () => ws.current?.close();
   }, [room, username, roomID, activeServerId, token]);
 
-  const selectedRoom = (roomName: string, id: string) => {
+  const selectedRoom = (roomName: string, id: string | number) => {
     setRoomID(id);
     setRoom(roomName);
     setIsSidebarOpen(false);
   };
 
   const getServer = useCallback(async () => {
+    if (!token) return;
     try {
-      const url = `${baseUrl}/servers`;
-      const res = await fetch(url, options("GET", token));
+      const res = await fetch(`${baseUrl}/servers`, options("GET", token));
       if (!res.ok) return;
       const ans = await res.json();
       setServer(Array.isArray(ans) ? ans : []);
@@ -112,12 +114,10 @@ export default function ChatLayout() {
     getServer();
   }, [getServer]);
 
+  // Close emoji picker on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        emojiPickerRef.current &&
-        !emojiPickerRef.current.contains(event.target as Node)
-      ) {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
         setShowEmojiPicker(false);
       }
     };
@@ -126,21 +126,13 @@ export default function ChatLayout() {
   }, []);
 
   const send = () => {
-    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      if (!message.trim()) return;
-      ws.current.send(message);
-      // Let the server push the message back to us to verify order/delivery
-      setMessage("");
-    } else {
-      console.error("WebSocket is not connected");
-    }
+    if (!message.trim() || ws.current?.readyState !== WebSocket.OPEN) return;
+    ws.current.send(message);
+    setMessage("");
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      send();
-    }
+    if (e.key === "Enter") { e.preventDefault(); send(); }
   };
 
   const onEmojiClick = (emojiData: EmojiClickData) => {
@@ -151,11 +143,7 @@ export default function ChatLayout() {
     if (!window.confirm("Delete this message?")) return;
     try {
       const res = await fetch(`${baseUrl}/messages/${msgId}`, options("DELETE", token));
-      if (res.ok) {
-        setChat((prev) => prev.filter((m) => m.id !== msgId));
-      } else {
-        console.error("Failed to delete message");
-      }
+      if (res.ok) setChat((prev) => prev.filter((m) => m.id !== msgId));
     } catch (err) {
       console.error("Delete error:", err);
     }
@@ -163,12 +151,8 @@ export default function ChatLayout() {
 
   return (
     <div className="app-shell" data-theme={theme}>
-      {/* Mobile Sidebar Overlay */}
-      {isSidebarOpen && (
-        <div className="overlay" onClick={() => setIsSidebarOpen(false)} />
-      )}
+      {isSidebarOpen && <div className="overlay" onClick={() => setIsSidebarOpen(false)} />}
 
-      {/* Sidebar Area */}
       <Sidebar
         getServer={getServer}
         onSelectRoom={selectedRoom}
@@ -178,14 +162,12 @@ export default function ChatLayout() {
         server={server}
         onServerChange={(id) => {
           setActiveServerId(id);
-          // Reset chat when switching servers
           setChat([]);
           setRoom("");
           setRoomID("");
         }}
       />
 
-      {/* Main Chat Area */}
       <main className="chat">
         <ChatHeader
           onOpenSidebar={() => setIsSidebarOpen(true)}
@@ -197,7 +179,12 @@ export default function ChatLayout() {
 
         {roomID && activeServerId ? (
           <>
-            <ChatScreen username={username} messages={chat} isAdmin={isAdmin} onDeleteMessage={handleDeleteMessage} />
+            <ChatScreen
+              username={username}
+              messages={chat}
+              isAdmin={isAdmin}
+              onDeleteMessage={handleDeleteMessage}
+            />
             <div className="chat-input border-t border-border">
               <div className="chat-input-wrapper">
                 <button
@@ -246,7 +233,9 @@ export default function ChatLayout() {
           <div className="empty-chat-state">
             <div className="cs-empty-icon" style={{ fontSize: 72, filter: "grayscale(1) opacity(0.3)" }}>💬</div>
             <div className="cs-empty-title" style={{ fontSize: 24 }}>Welcome to PingSpace!</div>
-            <div className="cs-empty-sub" style={{ fontSize: 16 }}>Select a server and a channel from the left sidebar to start chatting.</div>
+            <div className="cs-empty-sub" style={{ fontSize: 16 }}>
+              Select a server and a channel from the left sidebar to start chatting.
+            </div>
           </div>
         )}
       </main>
