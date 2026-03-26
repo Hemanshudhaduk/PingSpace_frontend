@@ -58,14 +58,29 @@ export default function ChatLayout() {
   const isAdmin = activeServer?.admin_id === currentUserId;
 
   // Fetch message history when room changes
+  // In ChatLayout.tsx — replace the message history useEffect with this
   useEffect(() => {
     if (!roomID || !activeServerId || !token) return;
-    fetch(`${baseUrl}/messages/${roomID}`, options("GET", token))
+
+    // ✅ Clear immediately so old room messages never show in new room
+    setChat([]);
+
+    // ✅ AbortController cancels the fetch if user switches room again quickly
+    const controller = new AbortController();
+
+    fetch(`${baseUrl}/messages/${roomID}`, {
+      ...options("GET", token),
+      signal: controller.signal,
+    })
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setChat(Array.isArray(data) ? data : []))
-      .catch((err) => console.error("History fetch error:", err));
-  }, [roomID, activeServerId, token]);
+      .catch((err) => {
+        if (err.name === "AbortError") return; // ✅ ignore cancelled requests
+        console.error("History fetch error:", err);
+      });
 
+    return () => controller.abort(); // ✅ cancel if roomID changes before fetch completes
+  }, [roomID, activeServerId, token]);
   // WebSocket connection
   useEffect(() => {
     if (!username || !room || !activeServerId || !token) return;
@@ -77,14 +92,20 @@ export default function ChatLayout() {
     ws.current.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
-        setChat((prev) => [...prev, {
-          id: payload.id,
-          sender: payload.sender,
-          content: payload.content,
-          created_at: payload.timestamp ??  new Date().toISOString()
-        }]);
+        setChat((prev) => [
+          ...prev,
+          {
+            id: payload.id,
+            sender: payload.sender,
+            content: payload.content,
+            timestamp: payload.timestamp ?? new Date().toISOString(),
+          },
+        ]);
       } catch {
-        setChat((prev) => [...prev, { sender: "System", content: String(event.data) }]);
+        setChat((prev) => [
+          ...prev,
+          { sender: "System", content: String(event.data) },
+        ]);
       }
     };
     ws.current.onerror = (error) => console.error("WebSocket error:", error);
@@ -93,6 +114,7 @@ export default function ChatLayout() {
   }, [room, username, roomID, activeServerId, token]);
 
   const selectedRoom = (roomName: string, id: string | number) => {
+    setChat([]); 
     setRoomID(id);
     setRoom(roomName);
     setIsSidebarOpen(false);
@@ -117,7 +139,10 @@ export default function ChatLayout() {
   // Close emoji picker on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+      if (
+        emojiPickerRef.current &&
+        !emojiPickerRef.current.contains(event.target as Node)
+      ) {
         setShowEmojiPicker(false);
       }
     };
@@ -132,7 +157,10 @@ export default function ChatLayout() {
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") { e.preventDefault(); send(); }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      send();
+    }
   };
 
   const onEmojiClick = (emojiData: EmojiClickData) => {
@@ -142,7 +170,10 @@ export default function ChatLayout() {
   const handleDeleteMessage = async (msgId: string) => {
     if (!window.confirm("Delete this message?")) return;
     try {
-      const res = await fetch(`${baseUrl}/messages/${msgId}`, options("DELETE", token));
+      const res = await fetch(
+        `${baseUrl}/messages/${msgId}`,
+        options("DELETE", token),
+      );
       if (res.ok) setChat((prev) => prev.filter((m) => m.id !== msgId));
     } catch (err) {
       console.error("Delete error:", err);
@@ -151,7 +182,9 @@ export default function ChatLayout() {
 
   return (
     <div className="app-shell" data-theme={theme}>
-      {isSidebarOpen && <div className="overlay" onClick={() => setIsSidebarOpen(false)} />}
+      {isSidebarOpen && (
+        <div className="overlay" onClick={() => setIsSidebarOpen(false)} />
+      )}
 
       <Sidebar
         getServer={getServer}
@@ -219,9 +252,21 @@ export default function ChatLayout() {
                   onClick={send}
                   disabled={!message.trim()}
                   title="Send message"
-                  style={{ opacity: message.trim() ? 1 : 0.5, cursor: message.trim() ? "pointer" : "not-allowed" }}
+                  style={{
+                    opacity: message.trim() ? 1 : 0.5,
+                    cursor: message.trim() ? "pointer" : "not-allowed",
+                  }}
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <line x1="22" y1="2" x2="11" y2="13" />
                     <polygon points="22 2 15 22 11 13 2 9 22 2" />
                   </svg>
@@ -231,10 +276,18 @@ export default function ChatLayout() {
           </>
         ) : (
           <div className="empty-chat-state">
-            <div className="cs-empty-icon" style={{ fontSize: 72, filter: "grayscale(1) opacity(0.3)" }}>💬</div>
-            <div className="cs-empty-title" style={{ fontSize: 24 }}>Welcome to PingSpace!</div>
+            <div
+              className="cs-empty-icon"
+              style={{ fontSize: 72, filter: "grayscale(1) opacity(0.3)" }}
+            >
+              💬
+            </div>
+            <div className="cs-empty-title" style={{ fontSize: 24 }}>
+              Welcome to PingSpace!
+            </div>
             <div className="cs-empty-sub" style={{ fontSize: 16 }}>
-              Select a server and a channel from the left sidebar to start chatting.
+              Select a server and a channel from the left sidebar to start
+              chatting.
             </div>
           </div>
         )}
