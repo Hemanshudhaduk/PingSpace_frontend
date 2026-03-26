@@ -81,7 +81,7 @@ export default function ChatLayout() {
           id: payload.id,
           sender: payload.sender,
           content: payload.content,
-          created_at: new Date().toISOString(),
+          created_at: payload.timestamp ??  new Date().toISOString()
         }]);
       } catch {
         setChat((prev) => [...prev, { sender: "System", content: String(event.data) }]);

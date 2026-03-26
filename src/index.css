@@ -1697,4 +1697,21 @@ a {
   transition: color 0.3s ease;
 }
 
+
+.cs-date-separator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 12px 0;
+}
+
+.cs-date-label {
+  background: var(--bg-secondary, rgba(0,0,0,0.08));
+  color: var(--muted, #888);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 14px;
+  border-radius: 999px;
+}
+
 /* =========================================== */
