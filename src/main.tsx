@@ -16,7 +16,7 @@ if (typeof document !== "undefined") {
 }
 
 setInterval(() => {
-  fetch(`${import.meta.env.VITE_BASE_URL}/health`).catch(() => {});
+  fetch('https://pingspace-backend.onrender.com/health').catch(() => {});
 }, 10 * 60 * 1000);
 
 const router = createBrowserRouter([
