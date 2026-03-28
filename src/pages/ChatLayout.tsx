@@ -17,11 +17,23 @@ import { useAuthStore } from "../store/authStore";
 import { useThemeStore } from "../store/themeStore";
 
 type Server = { id: string; name: string; admin_id: string };
+
+type Attachment = {
+  file_url: string;
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+};
 type ChatMessage = {
   id?: string;
   sender: string;
-  content: string;
+  content?: string;
   created_at?: string;
+  type?: "text" | "image" | "file" | "voice" | "video";
+  attachment?: Attachment;
 };
 
 export default function ChatLayout() {
@@ -41,7 +53,6 @@ export default function ChatLayout() {
 
   const token = localStorage.getItem("token");
 
-  // Decode JWT once
   const { username, currentUserId } = useMemo(() => {
     if (!token) return { username: undefined, currentUserId: "" };
     try {
@@ -56,16 +67,19 @@ export default function ChatLayout() {
 
   const activeServer = server.find((s) => s.id === activeServerId);
   const isAdmin = activeServer?.admin_id === currentUserId;
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   // Fetch message history when room changes
   // In ChatLayout.tsx — replace the message history useEffect with this
   useEffect(() => {
     if (!roomID || !activeServerId || !token) return;
 
-    // ✅ Clear immediately so old room messages never show in new room
     setChat([]);
 
-    // ✅ AbortController cancels the fetch if user switches room again quickly
     const controller = new AbortController();
 
     fetch(`${baseUrl}/messages/${roomID}`, {
@@ -81,7 +95,7 @@ export default function ChatLayout() {
 
     return () => controller.abort(); // ✅ cancel if roomID changes before fetch completes
   }, [roomID, activeServerId, token]);
-  // WebSocket connection
+
   useEffect(() => {
     if (!username || !room || !activeServerId || !token) return;
 
@@ -92,6 +106,7 @@ export default function ChatLayout() {
     ws.current.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
+        if (payload.type === "rate_limit") return;
         setChat((prev) => [
           ...prev,
           {
@@ -99,6 +114,8 @@ export default function ChatLayout() {
             sender: payload.sender,
             content: payload.content,
             timestamp: payload.timestamp ?? new Date().toISOString(),
+            type: payload.type ?? "text", // ✅ missing
+            attachment: payload.attachment ?? null,
           },
         ]);
       } catch {
@@ -114,7 +131,7 @@ export default function ChatLayout() {
   }, [room, username, roomID, activeServerId, token]);
 
   const selectedRoom = (roomName: string, id: string | number) => {
-    setChat([]); 
+    setChat([]);
     setRoomID(id);
     setRoom(roomName);
     setIsSidebarOpen(false);
@@ -136,7 +153,6 @@ export default function ChatLayout() {
     getServer();
   }, [getServer]);
 
-  // Close emoji picker on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -180,6 +196,58 @@ export default function ChatLayout() {
     }
   };
 
+  const uploadFile = async (file: File) => {
+    if (!roomID || !token) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("room_id", String(roomID));
+
+      const res = await fetch(`${baseUrl}/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        // ✅ NO Content-Type header — browser sets multipart boundary automatically
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.detail || "Upload failed");
+      }
+      // ✅ no need to setChat — WebSocket broadcast handles it
+    } catch (err) {
+      console.error("Upload error:", err);
+    } finally {
+      setUploading(false);
+    }
+  };
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => audioChunksRef.current.push(e.data);
+      recorder.onstop = async () => {
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const file = new File([blob], `voice-${Date.now()}.webm`, {
+          type: "audio/webm",
+        });
+        await uploadFile(file);
+        stream.getTracks().forEach((t) => t.stop());
+      };
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true);
+    } catch {
+      alert("Microphone access denied");
+    }
+  };
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop();
+    setIsRecording(false);
+  };
+
   return (
     <div className="app-shell" data-theme={theme}>
       {isSidebarOpen && (
@@ -220,6 +288,26 @@ export default function ChatLayout() {
             />
             <div className="chat-input border-t border-border">
               <div className="chat-input-wrapper">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  style={{ display: "none" }}
+                  accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.zip,.txt"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) uploadFile(file);
+                    e.target.value = ""; // reset so same file can be picked again
+                  }}
+                />
+                <button
+                  className="emoji-button"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Attach file"
+                  disabled={uploading}
+                >
+                  {uploading ? "⏳" : "📎"}
+                </button>
+
                 <button
                   className="emoji-button"
                   onClick={() => setShowEmojiPicker(!showEmojiPicker)}
@@ -247,6 +335,17 @@ export default function ChatLayout() {
                   onKeyDown={handleKeyDown}
                   autoComplete="off"
                 />
+                <button
+                  className={`emoji-button ${isRecording ? "recording" : ""}`}
+                  onMouseDown={startRecording}
+                  onMouseUp={stopRecording}
+                  onTouchStart={startRecording}
+                  onTouchEnd={stopRecording}
+                  title="Hold to record voice"
+                  style={{ color: isRecording ? "#ef4444" : undefined }}
+                >
+                  🎤
+                </button>
                 <button
                   className="send"
                   onClick={send}

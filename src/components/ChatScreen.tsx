@@ -1,10 +1,21 @@
 import { useEffect, useRef, useState } from "react";
+type Attachment = {
+  file_url: string;
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+};
 
 type ChatMessage = {
   id?: string;
   sender: string;
-  content: string;
+  content?: string;
   timestamp?: string;
+  type?: "text" | "image" | "file" | "voice" | "video";
+  attachment?: Attachment;
 };
 
 type ChatScreenProps = {
@@ -79,6 +90,81 @@ const getSenderColor = (name: string) => {
   ];
   return colors[hash % colors.length];
 };
+
+function MessageContent({ m }: { m: ChatMessage }) {
+  const type = m.type ?? "text";
+  const att = m.attachment;
+
+  if (type === "text" || !att) {
+    return <span className="cs-text">{m.content}</span>;
+  }
+
+  if (type === "image") {
+    return (
+      <a href={att.file_url} target="_blank" rel="noopener noreferrer">
+        <img
+          src={att.file_url}
+          alt={att.file_name}
+          style={{
+            maxWidth: "260px",
+            maxHeight: "260px",
+            borderRadius: "8px",
+            display: "block",
+            cursor: "pointer",
+            objectFit: "cover",
+          }}
+          loading="lazy"
+        />
+      </a>
+    );
+  }
+
+  if (type === "voice") {
+    return (
+      <audio controls style={{ maxWidth: "260px" }}>
+        <source src={att.file_url} type={att.mime_type} />
+      </audio>
+    );
+  }
+
+  if (type === "video") {
+    return (
+      <video controls style={{ maxWidth: "260px", borderRadius: "8px" }}>
+        <source src={att.file_url} type={att.mime_type} />
+      </video>
+    );
+  }
+
+  // file — pdf / doc / zip
+  const sizeMB = (att.file_size / 1024 / 1024).toFixed(1);
+  return (
+    <a
+      href={att.file_url}
+      download={att.file_name}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+        padding: "10px 14px",
+        borderRadius: "8px",
+        background: "var(--bg-secondary, rgba(0,0,0,0.06))",
+        textDecoration: "none",
+        color: "inherit",
+        maxWidth: "260px",
+      }}
+    >
+      <span style={{ fontSize: "28px" }}>📄</span>
+      <div>
+        <div style={{ fontSize: "13px", fontWeight: 600 }}>{att.file_name}</div>
+        <div style={{ fontSize: "11px", color: "var(--muted)" }}>{sizeMB} MB</div>
+      </div>
+    </a>
+  );
+}
+
+
 
 export default function ChatScreen({
   username,
@@ -222,7 +308,7 @@ export default function ChatScreen({
                         gap: "6px",
                       }}
                     >
-                      <span className="cs-text">{m.content}</span>
+                      <MessageContent m={m} />
                       {/* ✅ Always show time — timestamp now always present */}
                       <span
                         className="cs-time"
