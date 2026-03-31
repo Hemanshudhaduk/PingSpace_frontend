@@ -32,9 +32,26 @@ type ChatMessage = {
   sender: string;
   content?: string;
   created_at?: string;
+  timestamp?: string;
   type?: "text" | "image" | "file" | "voice" | "video";
   attachment?: Attachment;
 };
+
+const getTimestamp = (msg: ChatMessage) => msg.timestamp || msg.created_at || "";
+
+const sortChatMessages = (messages: ChatMessage[]) =>
+  [...messages].sort((a, b) => {
+    const ta = Date.parse(getTimestamp(a));
+    const tb = Date.parse(getTimestamp(b));
+    if (Number.isNaN(ta) || Number.isNaN(tb)) return 0;
+    return ta - tb;
+  });
+
+const normalizeChatMessage = (msg: Partial<ChatMessage>): ChatMessage => ({
+  ...msg,
+  sender: msg.sender ?? "System",
+  timestamp: msg.timestamp ?? msg.created_at ?? new Date().toISOString(),
+});
 
 export default function ChatLayout() {
   const logout = useAuthStore((s) => s.logout);
@@ -87,7 +104,11 @@ export default function ChatLayout() {
       signal: controller.signal,
     })
       .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setChat(Array.isArray(data) ? data : []))
+      .then((data) => {
+        if (!Array.isArray(data)) return setChat([]);
+        const normalized = data.map((msg) => normalizeChatMessage(msg));
+        setChat(sortChatMessages(normalized));
+      })
       .catch((err) => {
         if (err.name === "AbortError") return; // ✅ ignore cancelled requests
         console.error("History fetch error:", err);
@@ -107,22 +128,24 @@ export default function ChatLayout() {
       try {
         const payload = JSON.parse(event.data);
         if (payload.type === "rate_limit") return;
-        setChat((prev) => [
-          ...prev,
-          {
-            id: payload.id,
-            sender: payload.sender,
-            content: payload.content,
-            timestamp: payload.timestamp ?? new Date().toISOString(),
-            type: payload.type ?? "text", // ✅ missing
-            attachment: payload.attachment ?? null,
-          },
-        ]);
+
+        const nextMessage = normalizeChatMessage({
+          id: payload.id,
+          sender: payload.sender,
+          content: payload.content,
+          timestamp: payload.timestamp ?? new Date().toISOString(),
+          type: payload.type ?? "text",
+          attachment: payload.attachment ?? null,
+        });
+
+        setChat((prev) => sortChatMessages([...prev, nextMessage]));
       } catch {
-        setChat((prev) => [
-          ...prev,
-          { sender: "System", content: String(event.data) },
-        ]);
+        setChat((prev) =>
+          sortChatMessages([
+            ...prev,
+            normalizeChatMessage({ sender: "System", content: String(event.data) }),
+          ]),
+        );
       }
     };
     ws.current.onerror = (error) => console.error("WebSocket error:", error);

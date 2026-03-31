@@ -68,6 +68,14 @@ function getDateKey(ts?: string): string {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 
+const sortMessagesChronological = (messages: ChatMessage[]) =>
+  [...messages].sort((a, b) => {
+    const ta = Date.parse(a.timestamp || "");
+    const tb = Date.parse(b.timestamp || "");
+    if (Number.isNaN(ta) || Number.isNaN(tb)) return 0;
+    return ta - tb;
+  });
+
 const getSenderColor = (name: string) => {
   const hash = name
     .split("")
@@ -187,7 +195,9 @@ export default function ChatScreen({
     return () => document.removeEventListener("click", handleClickOutside);
   }, [activeMenuId]);
 
-  if (messages.length === 0) {
+  const sortedMessages = sortMessagesChronological(messages);
+
+  if (sortedMessages.length === 0) {
     return (
       <section className="cs-body" ref={containerRef}>
         <div className="cs-empty">
@@ -214,7 +224,7 @@ export default function ChatScreen({
   let currentGroup: ChatMessage[] | null = null;
   let currentSender = "";
 
-  for (const m of messages) {
+  for (const m of sortedMessages) {
     const dateKey = getDateKey(m.timestamp);
 
     // Insert date separator when date changes
