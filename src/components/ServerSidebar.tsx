@@ -1,10 +1,14 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { options } from "../helper/fetchOptions";
 import { getToken, useAuthStore } from "../store/authStore";
 import { baseUrl } from "../helper/constant";
 import { jwtDecode } from "jwt-decode";
 import InputModal from "./InputModal";
+import UserSettingsModal from "./UserSettingsModal";
+
+/* ─────────────────────────── types ─────────────────────────── */
 type Server = { name: string; id: string; admin_id: string };
+type TokenPayload = { id: string; sub?: string };
 
 type ServerProps = {
   server?: Server[];
@@ -12,56 +16,77 @@ type ServerProps = {
   parent?: (serverId: string) => void;
   getServer?: () => void;
 };
-type TokenPayload = { id: string; sub?: string };
-const token = getToken();
-const decoded = token ? jwtDecode<TokenPayload>(token) : null;
-const id = decoded?.id;
 
+/* ═══════════════════════════════════════════════════════════════
+   Component
+═══════════════════════════════════════════════════════════════ */
 const ServerSidebar = ({ getServer, server, parent }: ServerProps) => {
-  const [activeId, setActiveId] = useState<string>("home");
-  const [open, setOpen] = useState(false);
-  const [show, setShow] = useState(false);
+  const [activeId, setActiveId]         = useState<string>("home");
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showProfile, setShowProfile]   = useState(false);
+  const [showUserSettings, setShowUserSettings] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
-
   const { logout } = useAuthStore();
-  // Close profile popover when clicking outside
+
+  /* ── Decode token safely inside component ── */
+  const token = useMemo(() => getToken() || "", []);
+
+  const decoded = useMemo(() => {
+    if (!token) return null;
+    try { return jwtDecode<TokenPayload>(token); }
+    catch { return null; }
+  }, [token]);
+
+  const userId   = decoded?.id || "";
+  const userName = decoded?.sub || "";
+
+  /* Close profile popover on outside click */
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        profileRef.current &&
-        !profileRef.current.contains(event.target as Node)
-      ) {
-        setOpen(false);
+    if (!showProfile) return;
+    const handler = (e: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setShowProfile(false);
       }
     };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showProfile]);
 
-    if (open) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => {
-        document.removeEventListener("mousedown", handleClickOutside);
-      };
+  /* ── Create server handler ── */
+  const handleCreateServer = async (values: Record<string, string | number>) => {
+    const payload = {
+      name: String(values.name || "").trim(),
+      description: String(values.description || "").trim(),
+      owner_id: decoded?.id,
+    };
+    try {
+      const res = await fetch(`${baseUrl}/servers`, options("POST", token, payload));
+      await res.json();
+      setShowCreateModal(false);
+      getServer?.();
+    } catch (error) {
+      console.error(error);
     }
-  }, [open]);
-
-  const createServer = () => {
-    setShow(true);
   };
 
-  const tokenForUser = getToken();
-  const userName = tokenForUser
-    ? jwtDecode<TokenPayload>(tokenForUser).sub
-    : undefined;
-
+  /* ── render ─────────────────────────────────────────────── */
   return (
     <div className="server-sidebar">
+      {/* ── Home button ── */}
       <button
         className={"server-item home" + (activeId === "home" ? " active" : "")}
         aria-label="Home"
+        title="Home"
         onClick={() => setActiveId("home")}
       >
-        <div className="server-avatar">PS</div>
+        <div className="server-avatar">
+          <PingSpaceIcon />
+        </div>
       </button>
+
       <div className="server-separator" />
+
+      {/* ── Server list ── */}
       <div className="server-list">
         {server?.map((s) => (
           <button
@@ -82,30 +107,25 @@ const ServerSidebar = ({ getServer, server, parent }: ServerProps) => {
         ))}
       </div>
 
-      <button className="server-item" onClick={createServer}>
-        +
+      {/* ── Add server button ── */}
+      <button
+        className="server-item server-add"
+        aria-label="Create a server"
+        title="Create a server"
+        onClick={() => setShowCreateModal(true)}
+      >
+        <PlusIcon />
       </button>
-      {show && (
+
+      {/* ── Create Server Modal ── */}
+      {showCreateModal && (
         <InputModal
-          isOpen={show}
+          isOpen={showCreateModal}
           title="Create a server"
           description="Set your server details. You can change these later."
           submitLabel="Create server"
-          icon={
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path
-                d="M3 6C3 4.89 3.89 4 5 4H15C16.11 4 17 4.89 17 6V13C17 14.11 16.11 15 15 15H11.5L8.5 17.5V15H5C3.89 15 3 14.11 3 13V6Z"
-                stroke="#6366f1"
-                strokeWidth="1.5"
-                fill="none"
-                strokeLinejoin="round"
-              />
-              <circle cx="7.5" cy="9.5" r="1" fill="#6366f1" />
-              <circle cx="10" cy="9.5" r="1" fill="#6366f1" />
-              <circle cx="12.5" cy="9.5" r="1" fill="#6366f1" />
-            </svg>
-          }
-          onClose={() => setShow(false)}
+          icon={<ServerPlusIcon />}
+          onClose={() => setShowCreateModal(false)}
           fields={[
             {
               name: "name",
@@ -113,7 +133,7 @@ const ServerSidebar = ({ getServer, server, parent }: ServerProps) => {
               placeholder: "My awesome server",
               required: true,
               type: "text",
-              maxLength: 50, // ← enables char counter
+              maxLength: 50,
             },
             {
               name: "description",
@@ -121,38 +141,29 @@ const ServerSidebar = ({ getServer, server, parent }: ServerProps) => {
               placeholder: "What's this server about? (optional)",
               type: "textarea",
               rows: 3,
-              maxLength: 200, // ← enables char counter
+              maxLength: 200,
             },
           ]}
-          onSubmit={async (values) => {
-            const payload: {
-              name: string;
-              description: string;
-              owner_id: string | number | undefined;
-            } = {
-              name: String(values.name || "").trim(),
-              description: String(values.description || "").trim(),
-              owner_id: id,
-            };
-
-            try {
-              const res = await fetch(
-                `${baseUrl}/servers`,
-                options("POST", token, payload),
-              );
-              await res.json();
-
-              setShow(false);
-              getServer?.();
-            } catch (error) {
-              console.error(error);
-            }
-          }}
+          onSubmit={handleCreateServer}
         />
       )}
+
+      {/* ── Profile section ── */}
       <div className="profile-section">
         <div className="profile-anchor" ref={profileRef}>
-          {open && (
+          <button
+            className="server-item server-profile-btn"
+            aria-label="User profile"
+            title={userName || "Profile"}
+            onClick={() => setShowProfile((p) => !p)}
+          >
+            <div className="server-avatar server-profile-avatar">
+              {userName?.[0]?.toUpperCase() || "U"}
+            </div>
+            <span className="server-profile-dot" />
+          </button>
+
+          {showProfile && (
             <div className="profile-popover">
               <div className="profile-row">
                 <div className="profile-avatar">
@@ -160,18 +171,81 @@ const ServerSidebar = ({ getServer, server, parent }: ServerProps) => {
                 </div>
                 <div className="profile-meta">
                   <div className="profile-name">{userName || "User"}</div>
-                  <div className="profile-sub">Signed in</div>
+                  <div className="profile-sub">Online</div>
                 </div>
               </div>
-              <button className="profile-action" onClick={logout}>
-                Logout
+
+              <div className="profile-divider" />
+
+              <button
+                className="profile-menu-btn"
+                onClick={() => {
+                  setShowProfile(false);
+                  setShowUserSettings(true);
+                }}
+              >
+                <GearIcon /> User Settings
+              </button>
+
+              <button className="profile-menu-btn profile-logout-btn" onClick={logout}>
+                <LogoutIcon /> Log Out
               </button>
             </div>
           )}
         </div>
       </div>
+
+      {/* ── User Settings Modal ── */}
+      {showUserSettings && userName && userId && (
+        <UserSettingsModal
+          isOpen={showUserSettings}
+          userId={userId}
+          currentUsername={userName}
+          onClose={() => setShowUserSettings(false)}
+        />
+      )}
     </div>
   );
 };
 
 export default ServerSidebar;
+
+/* ── Inline SVG Icons ─────────────────────────────────────── */
+const PingSpaceIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+  </svg>
+);
+
+const PlusIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
+const ServerPlusIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+    <path
+      d="M3 6C3 4.89 3.89 4 5 4H15C16.11 4 17 4.89 17 6V13C17 14.11 16.11 15 15 15H11.5L8.5 17.5V15H5C3.89 15 3 14.11 3 13V6Z"
+      stroke="#6366f1" strokeWidth="1.5" fill="none" strokeLinejoin="round"
+    />
+    <circle cx="7.5" cy="9.5" r="1" fill="#6366f1" />
+    <circle cx="10" cy="9.5" r="1" fill="#6366f1" />
+    <circle cx="12.5" cy="9.5" r="1" fill="#6366f1" />
+  </svg>
+);
+
+const GearIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+  </svg>
+);
+
+const LogoutIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+    <path d="M10 2H13a1 1 0 011 1v10a1 1 0 01-1 1H10M7 11l3-3-3-3M10 8H2"
+      stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
