@@ -1,10 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import "./Serversettingsmodal.css";
 import { baseUrl } from "../helper/constant";
 import { options } from "../helper/fetchOptions";
 import { getToken } from "../store/authStore";
 
+/* ─────────────────────────── types ─────────────────────────── */
 type Server = { id: string; name: string; admin_id: string };
 type Member = { id: string; username: string; role: string };
+type Tab    = "overview" | "members";
 
 type Props = {
   isOpen: boolean;
@@ -15,6 +18,9 @@ type Props = {
   onServerDeleted: () => void;
 };
 
+/* ═══════════════════════════════════════════════════════════════
+   Component
+═══════════════════════════════════════════════════════════════ */
 export default function ServerSettingsModal({
   isOpen,
   server,
@@ -23,173 +29,258 @@ export default function ServerSettingsModal({
   onServerUpdated,
   onServerDeleted,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<"overview" | "members">("overview");
-  const [serverName, setServerName] = useState(server.name);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [activeTab,      setActiveTab]      = useState<Tab>("overview");
+  const [serverName,     setServerName]     = useState(server.name);
+  const [members,        setMembers]        = useState<Member[]>([]);
+  const [membersLoaded,  setMembersLoaded]  = useState(false);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [saving,         setSaving]         = useState(false);
+  const [deleting,       setDeleting]       = useState(false);
+  const [error,          setError]          = useState<string | null>(null);
 
   const isAdmin = server.admin_id === currentUserId;
-  const token = getToken() || "";
+  const token   = getToken() || "";
 
+  /* reset every time the modal opens */
   useEffect(() => {
-    if (isOpen && activeTab === "members") {
-      fetchMembers();
-    }
-  }, [isOpen, activeTab]);
+    if (!isOpen) return;
+    setServerName(server.name);
+    setError(null);
+    setActiveTab("overview");
+    setMembersLoaded(false);
+    setMembers([]);
+  }, [isOpen, server]);
 
-  const fetchMembers = async () => {
+  /* lazy-load members only on first visit to that tab */
+  const fetchMembers = useCallback(async () => {
+    if (membersLoaded || membersLoading) return;
+    setMembersLoading(true);
     try {
-      const res = await fetch(`${baseUrl}/server_user/${server.id}`, options("GET", token));
+      const res  = await fetch(`${baseUrl}/server_user/${server.id}`, options("GET", token));
       const data = await res.json();
       setMembers(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("Failed to fetch members", err);
+      setMembersLoaded(true);
+    } catch {
+      setError("Could not load members.");
+    } finally {
+      setMembersLoading(false);
     }
-  };
+  }, [membersLoaded, membersLoading, server.id, token]);
 
+  useEffect(() => {
+    if (isOpen && activeTab === "members") fetchMembers();
+  }, [isOpen, activeTab, fetchMembers]);
+
+  /* ── actions ────────────────────────────────────────────── */
   const handleUpdate = async () => {
     if (!serverName.trim() || serverName === server.name) return;
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`${baseUrl}/servers/${server.id}`, options("PUT", token, { name: serverName }));
-      if (!res.ok) throw new Error("Failed to update server");
+      const res = await fetch(
+        `${baseUrl}/servers/${server.id}`,
+        options("PUT", token, { name: serverName }),
+      );
+      if (!res.ok) throw new Error("Failed to update server.");
       onServerUpdated();
       onClose();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError((err as Error).message);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!window.confirm("Are you sure you want to completely delete this server? This cannot be undone.")) return;
-    setLoading(true);
+    if (!window.confirm("Delete this server? This cannot be undone.")) return;
+    setDeleting(true);
     try {
       const res = await fetch(`${baseUrl}/servers/${server.id}`, options("DELETE", token));
-      if (!res.ok) throw new Error("Failed to delete server");
+      if (!res.ok) throw new Error("Failed to delete server.");
       onServerDeleted();
       onClose();
-    } catch (err: any) {
-      setError(err.message);
-      setLoading(false);
+    } catch (err: unknown) {
+      setError((err as Error).message);
+      setDeleting(false);
     }
   };
 
-  const handleLeave = async () => {
-    if (!window.confirm("Are you sure you want to leave this server?")) return;
-    
-    // To leave, we need to find our own ServerUser link ID. But the backend's `GET /server_user/{server_id}` endpoint doesn't return the `ServerUser.id`! It returns User.id, User.username, ServerUser.role.
-    // Wait, the backend endpoint to delete a server user is `DELETE /server_users/{su_id}`.
-    // If we don't know the `su_id`, how do we leave?
-    // Let's check if the backend allows deleting by user ID.
-    // The backend `DELETE /server_users/{su_id}` takes the ServerUser.id. This means we might need a workaround or just skip implementing "Leave Server" until the backend is updated.
-    alert("Leaving server will be implemented after backend update to support leaving by User ID.");
+  const handleKick = async (memberId: string) => {
+    if (!window.confirm("Remove this member from the server?")) return;
+    try {
+      const res = await fetch(`${baseUrl}/server_users/${memberId}`, options("DELETE", token));
+      if (!res.ok) throw new Error("Failed to remove member.");
+      setMembers((prev) => prev.filter((m) => m.id !== memberId));
+    } catch (err: unknown) {
+      setError((err as Error).message);
+    }
   };
 
-  const removeMember = async (_userId: string) => {
-    alert("Kicking members requires the exact ServerUser ID which the backend isn't returning yet in the member list! We will update the backend to fix this.");
-    // Wait, if the user requested me to implement all working features, I can just skip the exact kick logic if the backend doesn't support it, OR I can just try.
+  /* close on backdrop click */
+  const onBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) onClose();
   };
+
+  /* close on Escape */
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
+  /* ── render ─────────────────────────────────────────────── */
   return (
-    <div className="modal-overlay" style={{ display: "flex", zIndex: 100 }}>
-      <div className="modal" style={{ width: 600, height: 450, display: "flex", padding: 0, overflow: "hidden" }}>
-        
-        {/* Settings Sidebar */}
-        <div style={{ width: 180, background: "var(--bg)", borderRight: "1px solid var(--border)", padding: "20px 10px" }}>
-          <div style={{ padding: "0 10px", fontSize: 12, fontWeight: 700, color: "var(--muted)", marginBottom: 8, textTransform: "uppercase" }}>
+    <div className="ssm-backdrop" onClick={onBackdropClick} role="presentation">
+      <div
+        className="ssm-shell"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Server Settings"
+      >
+        {/* ── Sidebar ── */}
+        <aside className="ssm-sidebar">
+          <div className="ssm-server-label" title={server.name}>
             {server.name}
           </div>
-          <button 
-            className={`channel-item ${activeTab === "overview" ? "active" : ""}`}
-            style={{ width: "100%", textAlign: "left", background: "transparent", border: "none", marginBottom: 2 }}
+
+          <button
+            className={`ssm-tab-btn ${activeTab === "overview" ? "active" : ""}`}
             onClick={() => setActiveTab("overview")}
           >
+            <span className="ssm-tab-icon">⚙️</span>
             Overview
           </button>
-          <button 
-             className={`channel-item ${activeTab === "members" ? "active" : ""}`}
-             style={{ width: "100%", textAlign: "left", background: "transparent", border: "none" }}
-             onClick={() => setActiveTab("members")}
+
+          <button
+            className={`ssm-tab-btn ${activeTab === "members" ? "active" : ""}`}
+            onClick={() => setActiveTab("members")}
           >
+            <span className="ssm-tab-icon">👥</span>
             Members
           </button>
-        </div>
+        </aside>
 
-        {/* Settings Content */}
-        <div style={{ flex: 1, padding: 30, display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <h2 style={{ fontSize: 20, margin: 0 }}>{activeTab === "overview" ? "Server Overview" : "Server Members"}</h2>
-            <button onClick={onClose} style={{ background: "transparent", border: "none", color: "var(--muted)", cursor: "pointer" }}>
+        {/* ── Main content ── */}
+        <div className="ssm-content">
+          {/* header */}
+          <div className="ssm-header">
+            <h2 className="ssm-title">
+              {activeTab === "overview" ? "Server Overview" : "Members"}
+            </h2>
+            <button className="ssm-close-btn" onClick={onClose} aria-label="Close dialog">
               ✕
             </button>
           </div>
 
-          {error && <div className="error-msg" style={{ marginBottom: 16 }}>{error}</div>}
-
-          {activeTab === "overview" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              <div>
-                <label className="label">Server Name</label>
-                <input 
-                  type="text" 
-                  className="input" 
-                  value={serverName}
-                  onChange={(e) => setServerName(e.target.value)}
-                  disabled={!isAdmin}
-                />
+          {/* body */}
+          <div className="ssm-body">
+            {error && (
+              <div className="ssm-error" role="alert">
+                {error}
               </div>
+            )}
 
-              {isAdmin ? (
-                <div style={{ marginTop: "auto", display: "flex", justifyContent: "space-between", paddingTop: 40, borderTop: "1px solid var(--border)" }}>
-                  <button className="button" style={{ background: "red", color: "white" }} onClick={handleDelete} disabled={loading}>
-                     Delete Server
-                  </button>
-                  <button className="button" onClick={handleUpdate} disabled={loading || serverName === server.name}>
-                     Save Changes
-                  </button>
+            {/* ── Overview ── */}
+            {activeTab === "overview" && (
+              <>
+                <div className="ssm-field">
+                  <label className="ssm-label" htmlFor="ssm-server-name">
+                    Server Name
+                  </label>
+                  <input
+                    id="ssm-server-name"
+                    type="text"
+                    className="ssm-input"
+                    value={serverName}
+                    onChange={(e) => setServerName(e.target.value)}
+                    disabled={!isAdmin}
+                    maxLength={100}
+                    placeholder="Enter server name"
+                  />
+                  {!isAdmin && (
+                    <span className="ssm-input-hint ssm-muted-text">
+                      Only the server admin can rename this server.
+                    </span>
+                  )}
                 </div>
-              ) : (
-                <div style={{ marginTop: "auto", paddingTop: 40 }}>
-                  <p style={{ color: "var(--muted)", fontSize: 13, marginBottom: 12 }}>You are not the admin of this server.</p>
-                  <button className="button" style={{ background: "red", color: "white" }} onClick={handleLeave}>
-                     Leave Server
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
 
-          {activeTab === "members" && (
-            <div style={{ overflowY: "auto", flex: 1 }}>
-              <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 12 }}>{members.length} Members</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {members.map((m) => (
-                  <div key={m.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px", background: "var(--bg)", borderRadius: 6 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div className="avatar" style={{ width: 32, height: 32 }}>{m.username.charAt(0).toUpperCase()}</div>
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 14 }}>{m.username} {m.id === server.admin_id && "👑"}</div>
-                        <div style={{ fontSize: 12, color: "var(--muted)", textTransform: "capitalize" }}>{m.role}</div>
-                      </div>
-                    </div>
-                    {/* Only admins can kick others, and they can't kick themselves */}
-                    {isAdmin && m.id !== currentUserId && (
-                       <button onClick={() => removeMember(m.id)} style={{ padding: "4px 8px", fontSize: 12, color: "red", background: "rgba(255,0,0,0.1)", border: "none", borderRadius: 4, cursor: "pointer" }}>
-                         Kick
-                       </button>
-                    )}
+                <div className="ssm-footer">
+                  {isAdmin ? (
+                    <>
+                      <button
+                        className="ssm-btn ssm-btn-danger"
+                        onClick={handleDelete}
+                        disabled={deleting || saving}
+                      >
+                        {deleting ? "Deleting…" : "🗑 Delete Server"}
+                      </button>
+                      <button
+                        className="ssm-btn ssm-btn-primary"
+                        onClick={handleUpdate}
+                        disabled={
+                          saving ||
+                          !serverName.trim() ||
+                          serverName === server.name
+                        }
+                      >
+                        {saving ? "Saving…" : "Save Changes"}
+                      </button>
+                    </>
+                  ) : (
+                    <p className="ssm-muted-text">
+                      You are a member of this server.
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* ── Members ── */}
+            {activeTab === "members" && (
+              <>
+                {membersLoading ? (
+                  <div className="ssm-spinner-wrap">
+                    <div className="ssm-spinner" role="status" aria-label="Loading members" />
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                ) : (
+                  <div className="ssm-member-scroll">
+                    <div className="ssm-member-count">
+                      {members.length} member{members.length !== 1 ? "s" : ""}
+                    </div>
 
+                    {members.map((m) => (
+                      <div key={m.id} className="ssm-member-row">
+                        <div className="ssm-member-info">
+                          <div className="ssm-avatar">
+                            {m.username.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="ssm-member-text">
+                            <div className="ssm-member-name">
+                              {m.username}
+                              {m.id === server.admin_id && " 👑"}
+                            </div>
+                            <div className="ssm-member-role">{m.role}</div>
+                          </div>
+                        </div>
+
+                        {isAdmin && m.id !== currentUserId && (
+                          <button
+                            className="ssm-kick-btn"
+                            onClick={() => handleKick(m.id)}
+                          >
+                            Kick
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
