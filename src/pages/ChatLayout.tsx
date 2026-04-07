@@ -60,6 +60,8 @@ export default function ChatLayout() {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [chat, setChat] = useState<ChatMessage[]>([]);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const messageCache = useRef<Record<string, ChatMessage[]>>({});
   const [message, setMessage] = useState("");
   const [roomID, setRoomID] = useState<string | number>();
   const [server, setServer] = useState<Server[]>([]);
@@ -93,7 +95,12 @@ export default function ChatLayout() {
   useEffect(() => {
     if (!roomID || !activeServerId || !token) return;
 
-    setChat([]);
+    const roomIdStr = String(roomID);
+    if (!messageCache.current[roomIdStr]) {
+      setIsLoadingMessages(true);
+    } else {
+      setIsLoadingMessages(false);
+    }
 
     const controller = new AbortController();
 
@@ -103,13 +110,21 @@ export default function ChatLayout() {
     })
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
-        if (!Array.isArray(data)) return setChat([]);
+        if (!Array.isArray(data)) {
+          if (!messageCache.current[roomIdStr]) setChat([]);
+          setIsLoadingMessages(false);
+          return;
+        }
         const normalized = data.map((msg) => normalizeChatMessage(msg));
-        setChat(sortChatMessages(normalized));
+        const sorted = sortChatMessages(normalized);
+        setChat(sorted);
+        messageCache.current[roomIdStr] = sorted;
+        setIsLoadingMessages(false);
       })
       .catch((err) => {
         if (err.name === "AbortError") return; // ✅ ignore cancelled requests
         console.error("History fetch error:", err);
+        setIsLoadingMessages(false);
       });
 
     return () => controller.abort(); // ✅ cancel if roomID changes before fetch completes
@@ -136,14 +151,20 @@ export default function ChatLayout() {
           attachment: payload.attachment ?? null,
         });
 
-        setChat((prev) => sortChatMessages([...prev, nextMessage]));
+        setChat((prev) => {
+          const next = sortChatMessages([...prev, nextMessage]);
+          if (roomID) messageCache.current[String(roomID)] = next;
+          return next;
+        });
       } catch {
-        setChat((prev) =>
-          sortChatMessages([
+        setChat((prev) => {
+          const next = sortChatMessages([
             ...prev,
             normalizeChatMessage({ sender: "System", content: String(event.data) }),
-          ]),
-        );
+          ]);
+          if (roomID) messageCache.current[String(roomID)] = next;
+          return next;
+        });
       }
     };
     ws.current.onerror = (error) => console.error("WebSocket error:", error);
@@ -152,7 +173,12 @@ export default function ChatLayout() {
   }, [room, username, roomID, activeServerId, token]);
 
   const selectedRoom = (roomName: string, id: string | number) => {
-    setChat([]);
+    const roomIdStr = String(id);
+    if (messageCache.current[roomIdStr]) {
+      setChat(messageCache.current[roomIdStr]);
+    } else {
+      setChat([]);
+    }
     setRoomID(id);
     setRoom(roomName);
     setIsSidebarOpen(false);
@@ -211,7 +237,13 @@ export default function ChatLayout() {
         `${baseUrl}/messages/${msgId}`,
         options("DELETE", token),
       );
-      if (res.ok) setChat((prev) => prev.filter((m) => m.id !== msgId));
+      if (res.ok) {
+        setChat((prev) => {
+          const next = prev.filter((m) => m.id !== msgId);
+          if (roomID) messageCache.current[String(roomID)] = next;
+          return next;
+        });
+      }
     } catch (err) {
       console.error("Delete error:", err);
     }
@@ -306,6 +338,7 @@ export default function ChatLayout() {
               messages={chat}
               isAdmin={isAdmin}
               onDeleteMessage={handleDeleteMessage}
+              isLoading={isLoadingMessages}
             />
             <div className="chat-input border-t border-border">
               <div className="chat-input-wrapper">

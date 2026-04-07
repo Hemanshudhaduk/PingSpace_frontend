@@ -212,9 +212,21 @@ export default ServerSidebar;
 
 /* ── Inline SVG Icons ─────────────────────────────────────── */
 const PingSpaceIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-  </svg>
+  <span
+    style={{
+      fontWeight: 800,
+      fontSize: "18px",
+      letterSpacing: "-0.5px",
+      lineHeight: 1,
+      fontFamily: "'Inter', sans-serif",
+      background: "linear-gradient(135deg, #ffffff 0%, #c7d2fe 100%)",
+      WebkitBackgroundClip: "text",
+      WebkitTextFillColor: "transparent",
+      userSelect: "none",
+    }}
+  >
+    PS
+  </span>
 );
 
 const PlusIcon = () => (

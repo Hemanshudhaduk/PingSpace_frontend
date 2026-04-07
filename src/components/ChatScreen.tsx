@@ -23,6 +23,7 @@ type ChatScreenProps = {
   messages: ChatMessage[];
   isAdmin?: boolean;
   onDeleteMessage?: (id: string) => void;
+  isLoading?: boolean;
 };
 
 function formatTime(ts?: string) {
@@ -179,6 +180,7 @@ export default function ChatScreen({
   messages,
   isAdmin,
   onDeleteMessage,
+  isLoading,
 }: ChatScreenProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
@@ -196,6 +198,17 @@ export default function ChatScreen({
   }, [activeMenuId]);
 
   const sortedMessages = sortMessagesChronological(messages);
+
+  if (isLoading && sortedMessages.length === 0) {
+    return (
+      <section className="cs-body" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
+          <div className="channel-loading-spinner" style={{ width: "36px", height: "36px", borderWidth: "3px" }}></div>
+          <div style={{ color: "var(--muted)", fontSize: "14px", fontWeight: 500 }}>Loading messages...</div>
+        </div>
+      </section>
+    );
+  }
 
   if (sortedMessages.length === 0) {
     return (
