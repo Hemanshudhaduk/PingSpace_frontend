@@ -6,7 +6,6 @@ import { jwtDecode } from "jwt-decode";
 import InputModal from "./InputModal";
 type Server = { name: string; id: string; admin_id: string };
 
-
 type ServerProps = {
   server?: Server[];
   onToggleTheme?: () => void;
@@ -18,11 +17,7 @@ const token = getToken();
 const decoded = token ? jwtDecode<TokenPayload>(token) : null;
 const id = decoded?.id;
 
-const ServerSidebar = ({
-  getServer,
-  server,
-  parent,
-}: ServerProps) => {
+const ServerSidebar = ({ getServer, server, parent }: ServerProps) => {
   const [activeId, setActiveId] = useState<string>("home");
   const [open, setOpen] = useState(false);
   const [show, setShow] = useState(false);
@@ -93,28 +88,48 @@ const ServerSidebar = ({
       {show && (
         <InputModal
           isOpen={show}
-          title="Create Server"
+          title="Create a server"
           description="Set your server details. You can change these later."
-          submitLabel="Create"
+          submitLabel="Create server"
+          icon={
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path
+                d="M3 6C3 4.89 3.89 4 5 4H15C16.11 4 17 4.89 17 6V13C17 14.11 16.11 15 15 15H11.5L8.5 17.5V15H5C3.89 15 3 14.11 3 13V6Z"
+                stroke="#6366f1"
+                strokeWidth="1.5"
+                fill="none"
+                strokeLinejoin="round"
+              />
+              <circle cx="7.5" cy="9.5" r="1" fill="#6366f1" />
+              <circle cx="10" cy="9.5" r="1" fill="#6366f1" />
+              <circle cx="12.5" cy="9.5" r="1" fill="#6366f1" />
+            </svg>
+          }
           onClose={() => setShow(false)}
           fields={[
             {
               name: "name",
               label: "Server Name",
-              placeholder: "My Server",
+              placeholder: "My awesome server",
               required: true,
               type: "text",
+              maxLength: 50, // ← enables char counter
             },
             {
               name: "description",
               label: "Description",
-              placeholder: "Optional description",
+              placeholder: "What's this server about? (optional)",
               type: "textarea",
               rows: 3,
+              maxLength: 200, // ← enables char counter
             },
           ]}
           onSubmit={async (values) => {
-            const payload: any = {
+            const payload: {
+              name: string;
+              description: string;
+              owner_id: string | number | undefined;
+            } = {
               name: String(values.name || "").trim(),
               description: String(values.description || "").trim(),
               owner_id: id,
@@ -123,10 +138,10 @@ const ServerSidebar = ({
             try {
               const res = await fetch(
                 `${baseUrl}/servers`,
-                options("POST", token, payload)
+                options("POST", token, payload),
               );
               await res.json();
-              
+
               setShow(false);
               getServer?.();
             } catch (error) {
@@ -136,7 +151,6 @@ const ServerSidebar = ({
         />
       )}
       <div className="profile-section">
-   
         <div className="profile-anchor" ref={profileRef}>
           {open && (
             <div className="profile-popover">

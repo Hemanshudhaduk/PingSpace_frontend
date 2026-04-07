@@ -1,30 +1,22 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import "./InputModel.css";
 
-type SelectOption = {
-  label: string;
-  value: string | number;
-};
+type SelectOption = { label: string; value: string | number };
 
 type FieldConfig = {
   name: string;
   label?: string;
-  type?:
-    | "text"
-    | "textarea"
-    | "number"
-    | "email"
-    | "password"
-    | "url"
-    | "select";
+  type?: "text" | "textarea" | "number" | "email" | "password" | "url" | "select";
   placeholder?: string;
   defaultValue?: string | number;
   required?: boolean;
-  options?: SelectOption[]; // for select
-  rows?: number; // for textarea
-  pattern?: string; // html pattern
+  options?: SelectOption[];
+  rows?: number;
+  pattern?: string;
   min?: number;
   max?: number;
   step?: number;
+  maxLength?: number;
 };
 
 type InputModalProps = {
@@ -33,6 +25,7 @@ type InputModalProps = {
   description?: string;
   fields: FieldConfig[];
   submitLabel?: string;
+  icon?: React.ReactNode;
   onClose: () => void;
   onSubmit: (values: Record<string, string | number>) => void | Promise<void>;
   isSubmitting?: boolean;
@@ -44,49 +37,48 @@ const InputModal: React.FC<InputModalProps> = ({
   description,
   fields,
   submitLabel = "Create",
+  icon,
   onClose,
   onSubmit,
   isSubmitting,
 }) => {
-  const [values, setValues] = useState<Record<string, string | number>>({});
+  const [values, setValues]           = useState<Record<string, string | number>>({});
   const [internalSubmitting, setInternalSubmitting] = useState(false);
+  const [success, setSuccess]         = useState(false);
+  const firstInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+
   const initialValues = useMemo(() => {
     const init: Record<string, string | number> = {};
-    (fields || []).forEach((f) => {
-      init[f.name] = f.defaultValue ?? "";
-    });
+    (fields || []).forEach((f) => { init[f.name] = f.defaultValue ?? ""; });
     return init;
   }, [fields]);
-
-  const dialogRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       setValues(initialValues);
+      setSuccess(false);
+      setTimeout(() => firstInputRef.current?.focus(), 80);
     }
   }, [isOpen]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (!isOpen) return;
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose();
-      }
+      if (e.key === "Escape") { e.stopPropagation(); onClose(); }
     };
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
   }, [isOpen, onClose]);
 
-  const handleChange = (name: string, value: string | number) => {
+  const handleChange = (name: string, value: string | number) =>
     setValues((prev) => ({ ...prev, [name]: value }));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       if (isSubmitting === undefined) setInternalSubmitting(true);
       await onSubmit(values);
+      setSuccess(true);
     } finally {
       if (isSubmitting === undefined) setInternalSubmitting(false);
     }
@@ -98,71 +90,64 @@ const InputModal: React.FC<InputModalProps> = ({
 
   return (
     <div
-      className="modal-overlay"
+      className="im-overlay"
       aria-modal="true"
       role="dialog"
-      aria-labelledby="input-modal-title"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      aria-labelledby="im-title"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div
-        ref={dialogRef}
-        className="modal"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-header">
+      <div className="im-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="im-accent" />
+
+        <div className="im-header">
           <div>
-            <h2 id="input-modal-title" className="modal-title">
-              {title}
-            </h2>
-            {description ? <p className="modal-desc">{description}</p> : null}
+            {icon && <div className="im-icon">{icon}</div>}
+            <h2 id="im-title" className="im-title">{title}</h2>
+            {description && <p className="im-desc">{description}</p>}
           </div>
-          <button
-            type="button"
-            aria-label="Close"
-            className="modal-close"
-            onClick={onClose}
-          >
-            ×
+          <button type="button" aria-label="Close" className="im-close" onClick={onClose}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="modal-form">
-          {(fields || []).map((field) => {
+        <form onSubmit={handleSubmit} className="im-form">
+          {(fields || []).map((field, i) => {
+            const charLen = String(values[field.name] ?? "").length;
+            const isFirst = i === 0;
+
             const commonProps = {
               id: field.name,
               name: field.name,
               placeholder: field.placeholder,
               required: field.required,
-              onChange: (
-                e: React.ChangeEvent<
-                  HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-                >
-              ) => handleChange(field.name, e.target.value),
               value: values[field.name] ?? "",
-              className: "modal-input",
-            } as const;
+              maxLength: field.maxLength,
+              onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+                handleChange(field.name, e.target.value),
+            };
 
             return (
-              <div key={field.name} className="modal-field">
-                <label htmlFor={field.name} className="modal-label">
-                  {field.label}
-                </label>
+              <div key={field.name} className="im-field">
+                {field.label && (
+                  <label htmlFor={field.name} className="im-label">
+                    {field.label}
+                    {field.required && <span className="im-required-dot" />}
+                  </label>
+                )}
 
                 {field.type === "textarea" ? (
                   <textarea
-                    {...(commonProps as any)}
+                    {...commonProps  as React.TextareaHTMLAttributes<HTMLTextAreaElement>}
                     rows={field.rows ?? 3}
-                    className="modal-textarea"
+                    className="im-textarea"
+                    ref={isFirst ? (firstInputRef as React.RefObject<HTMLTextAreaElement>) : undefined}
                   />
                 ) : field.type === "select" ? (
                   <select
-                    id={field.name}
-                    name={field.name}
-                    onChange={(e) => handleChange(field.name, e.target.value)}
-                    value={(values[field.name] as any) ?? ""}
-                    className="modal-select"
+                    {...commonProps as React.SelectHTMLAttributes<HTMLSelectElement>}
+                    className="im-select"
                   >
                     <option value="" disabled={field.required}>
                       {field.placeholder ?? "Select an option"}
@@ -175,29 +160,40 @@ const InputModal: React.FC<InputModalProps> = ({
                   </select>
                 ) : (
                   <input
-                    {...(commonProps as any)}
+                    {...commonProps }
                     type={field.type ?? "text"}
                     pattern={field.pattern}
-                    min={field.min as any}
-                    max={field.max as any}
-                    step={field.step as any}
+                    min={field.min}
+                    max={field.max}
+                    step={field.step}
+                    className="im-input"
+                    ref={isFirst ? (firstInputRef as React.RefObject<HTMLInputElement>) : undefined}
                   />
+                )}
+
+                {field.maxLength && (
+                  <span className={`im-charcount ${charLen > field.maxLength * 0.85 ? "warn" : ""}`}>
+                    {charLen} / {field.maxLength}
+                  </span>
                 )}
               </div>
             );
           })}
 
-          <div className="modal-actions">
-            <button
-              type="button"
-              className="btn"
-              onClick={onClose}
-              disabled={submitting}
-            >
+          <div className="im-divider" />
+
+          <div className="im-actions">
+            <button type="button" className="im-btn-cancel" onClick={onClose} disabled={submitting}>
               Cancel
             </button>
-            <button type="submit" className="btn primary" disabled={submitting}>
-              {submitting ? "Saving..." : submitLabel}
+            <button type="submit" className={`im-btn-submit ${success ? "success" : ""}`} disabled={submitting}>
+              {submitting ? (
+                <><span className="im-spinner" /> Saving...</>
+              ) : success ? (
+                <><CheckIcon /> Done!</>
+              ) : (
+                <><ArrowIcon /> {submitLabel}</>
+              )}
             </button>
           </div>
         </form>
@@ -205,5 +201,17 @@ const InputModal: React.FC<InputModalProps> = ({
     </div>
   );
 };
+
+const ArrowIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+    <path d="M7 1L13 7L7 13M1 7H13" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+    <path d="M2 7L6 11L12 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
 
 export default InputModal;

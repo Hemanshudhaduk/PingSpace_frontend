@@ -90,8 +90,6 @@ export default function ChatLayout() {
   const [isRecording, setIsRecording] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  // Fetch message history when room changes
-  // In ChatLayout.tsx — replace the message history useEffect with this
   useEffect(() => {
     if (!roomID || !activeServerId || !token) return;
 
