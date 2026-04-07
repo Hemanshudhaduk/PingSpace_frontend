@@ -296,7 +296,7 @@ export default function Sidebar({
               }}
             >
               <div className="section-title">Text Channels</div>
-              {activeServer && (
+              {activeServer && isAdmin && (
                 <button
                   onClick={() => setShow(true)}
                   aria-label="Create channel"
