@@ -4,7 +4,7 @@ import ServerSidebar from "./ServerSidebar";
 import { getToken } from "../store/authStore";
 import { baseUrl } from "../helper/constant";
 import { options } from "../helper/fetchOptions";
-import InputModal from "./InputModal";
+import CreateRoomModal from "./CreateRoomModal";
 import ServerSettingsModal from "./ServerSettingsModal";
 import ChannelSettingsModal from "./ChannelSettingsModal";
 import JoinRequestsModal from "./JoinRequestsModal";
@@ -124,21 +124,7 @@ export default function Sidebar({
     return q ? rooms.filter((r) => r.name.toLowerCase().includes(q)) : rooms;
   }, [rooms, query]);
 
-  const handleSubmit = async (values: Record<string, string | number>) => {
-    if (!activeServerId) return;
-    try {
-      const payload = {
-        name: String(values.name || "").trim(),
-        description: String(values.description || "").trim(),
-        server_id: activeServerId,
-      };
-      await fetch(`${baseUrl}/rooms`, options("POST", tokenString, payload));
-      setShow(false);
-      getRoom();
-    } catch (error) {
-      console.error(error);
-    }
-  };
+
 
   const handleInvite = () => {
     if (!activeServerId) return;
@@ -450,46 +436,12 @@ export default function Sidebar({
         </div>
       </div>
 
-      {show && (
-        <InputModal
+      {show && activeServerId && (
+        <CreateRoomModal
           isOpen={show}
-          title="Create Channel"
-          description="A channel is where your team communicates."
-          submitLabel="Create Channel"
-          icon={
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path
-                d="M3 6C3 4.89 3.89 4 5 4H15C16.11 4 17 4.89 17 6V13C17 14.11 16.11 15 15 15H11.5L8.5 17.5V15H5C3.89 15 3 14.11 3 13V6Z"
-                stroke="#6366f1"
-                strokeWidth="1.5"
-                fill="none"
-                strokeLinejoin="round"
-              />
-              <circle cx="7.5" cy="9.5" r="1" fill="#6366f1" />
-              <circle cx="10" cy="9.5" r="1" fill="#6366f1" />
-              <circle cx="12.5" cy="9.5" r="1" fill="#6366f1" />
-            </svg>
-          }
+          serverId={activeServerId}
           onClose={() => setShow(false)}
-          fields={[
-            {
-              name: "name",
-              label: "Channel Name",
-              placeholder: "e.g. general",
-              required: true,
-              type: "text",
-              maxLength: 50,
-            },
-            {
-              name: "description",
-              label: "Topic (optional)",
-              placeholder: "What's this channel about?",
-              type: "text",
-              rows: 3,
-              maxLength: 200, 
-            },
-          ]}
-          onSubmit={handleSubmit}
+          onRoomCreated={getRoom}
         />
       )}
       {activeServer && (
