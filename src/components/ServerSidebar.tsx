@@ -21,9 +21,9 @@ type ServerProps = {
    Component
 ═══════════════════════════════════════════════════════════════ */
 const ServerSidebar = ({ getServer, server, parent }: ServerProps) => {
-  const [activeId, setActiveId]         = useState<string>("home");
+  const [activeId, setActiveId] = useState<string>("home");
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showProfile, setShowProfile]   = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [showUserSettings, setShowUserSettings] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const { logout } = useAuthStore();
@@ -37,7 +37,7 @@ const ServerSidebar = ({ getServer, server, parent }: ServerProps) => {
     catch { return null; }
   }, [token]);
 
-  const userId   = decoded?.id || "";
+  const userId = decoded?.id || "";
   const userName = decoded?.sub || "";
 
   /* Close profile popover on outside click */
@@ -151,18 +151,6 @@ const ServerSidebar = ({ getServer, server, parent }: ServerProps) => {
       {/* ── Profile section ── */}
       <div className="profile-section">
         <div className="profile-anchor" ref={profileRef}>
-          <button
-            className="server-item server-profile-btn"
-            aria-label="User profile"
-            title={userName || "Profile"}
-            onClick={() => setShowProfile((p) => !p)}
-          >
-            <div className="server-avatar server-profile-avatar">
-              {userName?.[0]?.toUpperCase() || "U"}
-            </div>
-            <span className="server-profile-dot" />
-          </button>
-
           {showProfile && (
             <div className="profile-popover">
               <div className="profile-row">
