@@ -1,23 +1,21 @@
 import React from "react";
+import {lazy, Suspense} from "react";
 import ReactDOM from "react-dom/client";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
 import "./index.css";
-import LoginPage from "./pages/LoginPage";
-import SignUpPage from "./pages/SignUpPage";
-import ChatLayout from "./pages/ChatLayout";
+const LoginPage   = lazy(() => import("./pages/LoginPage"));
+const SignUpPage  = lazy(() => import("./pages/SignUpPage"));
+const ChatLayout  = lazy(() => import("./pages/ChatLayout"));
+const JoinPage    = lazy(() => import("./pages/JoinPage"));
 import ProtectedRoute from "./routes/ProtectedRoute";
-import JoinPage from "./pages/JoinPage";
-// Ensure theme is applied before first paint
-const savedTheme =
-  (typeof localStorage !== "undefined" && localStorage.getItem("theme")) ||
-  "light";
-if (typeof document !== "undefined") {
-  document.documentElement.setAttribute("data-theme", savedTheme);
-}
+import AppLoader from "./components/Apploader";
 
-setInterval(() => {
-  fetch('https://pingspace-backend.onrender.com/health').catch(() => {});
-}, 10 * 60 * 1000);
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    fetch("https://pingspace-backend.onrender.com/health").catch(() => {});
+  }
+});
 
 const router = createBrowserRouter([
   { path: "/", element: <LoginPage /> },
@@ -31,10 +29,13 @@ const router = createBrowserRouter([
       </ProtectedRoute>
     ),
   },
+  { path: "*", element: <Navigate to="/" replace /> }
 ]);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
+    <Suspense fallback={<AppLoader />}>
     <RouterProvider router={router} />
+    </Suspense>
   </React.StrictMode>
 );

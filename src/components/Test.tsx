@@ -1,7 +1,7 @@
 import InputModal from "./InputModal";
 import { useState } from "react";
 
-const test = () => {
+const Test = () => {
   const [isOpen, setIsOpen] = useState(true);
   const title = "test";
   const description = "hello this for test";
@@ -40,4 +40,4 @@ const test = () => {
   );
 };
 
-export default test;
+export default Test;
