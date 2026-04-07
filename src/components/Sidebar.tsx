@@ -456,6 +456,20 @@ export default function Sidebar({
           title="Create Channel"
           description="A channel is where your team communicates."
           submitLabel="Create Channel"
+          icon={
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path
+                d="M3 6C3 4.89 3.89 4 5 4H15C16.11 4 17 4.89 17 6V13C17 14.11 16.11 15 15 15H11.5L8.5 17.5V15H5C3.89 15 3 14.11 3 13V6Z"
+                stroke="#6366f1"
+                strokeWidth="1.5"
+                fill="none"
+                strokeLinejoin="round"
+              />
+              <circle cx="7.5" cy="9.5" r="1" fill="#6366f1" />
+              <circle cx="10" cy="9.5" r="1" fill="#6366f1" />
+              <circle cx="12.5" cy="9.5" r="1" fill="#6366f1" />
+            </svg>
+          }
           onClose={() => setShow(false)}
           fields={[
             {
@@ -464,12 +478,15 @@ export default function Sidebar({
               placeholder: "e.g. general",
               required: true,
               type: "text",
+              maxLength: 50,
             },
             {
               name: "description",
               label: "Topic (optional)",
               placeholder: "What's this channel about?",
               type: "text",
+              rows: 3,
+              maxLength: 200, 
             },
           ]}
           onSubmit={handleSubmit}
