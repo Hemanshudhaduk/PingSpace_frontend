@@ -22,7 +22,6 @@ const ServerSidebar = ({
   getServer,
   server,
   parent,
-  onToggleTheme,
 }: ServerProps) => {
   const [activeId, setActiveId] = useState<string>("home");
   const [open, setOpen] = useState(false);
@@ -137,23 +136,8 @@ const ServerSidebar = ({
         />
       )}
       <div className="profile-section">
-        <button
-          className="server-item profile-button"
-          title="Toggle theme"
-          onClick={onToggleTheme}
-          aria-label="Toggle theme"
-        >
-          🌓
-        </button>
+   
         <div className="profile-anchor" ref={profileRef}>
-          <button
-            className="server-item profile-button"
-            title="Profile"
-            aria-label="Profile"
-            onClick={() => setOpen((v) => !v)}
-          >
-            {userName?.[0]?.toUpperCase() || "U"}
-          </button>
           {open && (
             <div className="profile-popover">
               <div className="profile-row">

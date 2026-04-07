@@ -26,7 +26,6 @@ type SidebarProps = {
 export default function Sidebar({
   getServer,
   onSelectRoom,
-  onToggleTheme,
   isOpen,
   activeRoomName,
   server,
@@ -158,7 +157,6 @@ export default function Sidebar({
       <div className="sidebar-row">
         <ServerSidebar
           getServer={getServer}
-          onToggleTheme={onToggleTheme}
           server={server}
           parent={handleSeverID}
         />
