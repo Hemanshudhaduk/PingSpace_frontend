@@ -2035,6 +2035,47 @@ a {
 }
 
 
+/* ── Media Content (Responsive) ── */
+.cs-media {
+  max-width: clamp(150px, 70vw, 320px);
+  max-height: 320px;
+  border-radius: 8px;
+  display: block;
+  cursor: pointer;
+  object-fit: cover;
+}
+
+/* ── File Link (Responsive) ── */
+.cs-file-link {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 2vw, 10px);
+  padding: clamp(8px, 2vw, 10px) clamp(10px, 2vw, 14px);
+  border-radius: 8px;
+  background: var(--bg-secondary, rgba(0,0,0,0.06));
+  text-decoration: none;
+  color: inherit;
+  max-width: clamp(140px, 80vw, 320px);
+  transition: background 0.2s;
+}
+
+.cs-file-link:hover {
+  background: var(--bg-secondary, rgba(0,0,0,0.12));
+}
+
+.cs-file-name {
+  font-size: clamp(12px, 2.5vw, 13px);
+  font-weight: 600;
+  word-break: break-word;
+  line-height: 1.2;
+}
+
+.cs-file-size {
+  font-size: clamp(10px, 2vw, 11px);
+  color: var(--muted);
+  margin-top: 2px;
+}
+
 .cs-date-separator {
   display: flex;
   align-items: center;

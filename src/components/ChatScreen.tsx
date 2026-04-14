@@ -114,14 +114,7 @@ function MessageContent({ m }: { m: ChatMessage }) {
         <img
           src={att.file_url}
           alt={att.file_name}
-          style={{
-            maxWidth: "260px",
-            maxHeight: "260px",
-            borderRadius: "8px",
-            display: "block",
-            cursor: "pointer",
-            objectFit: "cover",
-          }}
+          className="cs-media"
           loading="lazy"
         />
       </a>
@@ -130,7 +123,7 @@ function MessageContent({ m }: { m: ChatMessage }) {
 
   if (type === "voice") {
     return (
-      <audio controls style={{ maxWidth: "260px" }}>
+      <audio controls className="cs-media">
         <source src={att.file_url} type={att.mime_type} />
       </audio>
     );
@@ -138,7 +131,7 @@ function MessageContent({ m }: { m: ChatMessage }) {
 
   if (type === "video") {
     return (
-      <video controls style={{ maxWidth: "260px", borderRadius: "8px" }}>
+      <video controls className="cs-media">
         <source src={att.file_url} type={att.mime_type} />
       </video>
     );
@@ -152,22 +145,12 @@ function MessageContent({ m }: { m: ChatMessage }) {
       download={att.file_name}
       target="_blank"
       rel="noopener noreferrer"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "10px",
-        padding: "10px 14px",
-        borderRadius: "8px",
-        background: "var(--bg-secondary, rgba(0,0,0,0.06))",
-        textDecoration: "none",
-        color: "inherit",
-        maxWidth: "260px",
-      }}
+      className="cs-file-link"
     >
-      <span style={{ fontSize: "28px" }}>📄</span>
+      <span style={{ fontSize: "clamp(20px, 5vw, 28px)" }}>📄</span>
       <div>
-        <div style={{ fontSize: "13px", fontWeight: 600 }}>{att.file_name}</div>
-        <div style={{ fontSize: "11px", color: "var(--muted)" }}>{sizeMB} MB</div>
+        <div className="cs-file-name">{att.file_name}</div>
+        <div className="cs-file-size">{sizeMB} MB</div>
       </div>
     </a>
   );

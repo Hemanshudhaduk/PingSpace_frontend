@@ -376,8 +376,8 @@ export default function ChatLayout() {
                       theme={theme === "dark" ? Theme.DARK : Theme.LIGHT}
                       searchDisabled={false}
                       skinTonesDisabled
-                      width={300}
-                      height={400}
+                      width={Math.min(320, window.innerWidth - 40)}
+                      height={Math.min(400, window.innerHeight - 200)}
                     />
                   </div>
                 )}
