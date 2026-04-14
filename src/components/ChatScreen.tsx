@@ -311,18 +311,20 @@ export default function ChatScreen({
                       style={{
                         display: "flex",
                         alignItems: "flex-end",
-                        gap: "6px",
+                        gap: "4px",
+                        width: "100%",
                       }}
                     >
                       <MessageContent m={m} />
-                      {/* ✅ Always show time — timestamp now always present */}
+                      {/* ✅ Time positioned inside bubble */}
                       <span
                         className="cs-time"
                         style={{
-                          fontSize: "11px",
+                          fontSize: "10px",
                           color: "var(--muted)",
                           whiteSpace: "nowrap",
-                          marginBottom: "-2px",
+                          flexShrink: 0,
+                          marginBottom: "1px",
                         }}
                       >
                         {formatTime(m.timestamp)}
