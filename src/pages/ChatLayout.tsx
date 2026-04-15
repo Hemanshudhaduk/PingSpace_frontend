@@ -11,6 +11,7 @@ import EmojiPicker, { EmojiClickData, Theme } from "emoji-picker-react";
 import ChatHeader from "../components/ChatHeader";
 import ChatScreen from "../components/ChatScreen";
 import Sidebar from "../components/Sidebar";
+import TypingIndicator from "../components/TypingIndicator";
 import { baseUrl } from "../helper/constant";
 import { options } from "../helper/fetchOptions";
 import { useAuthStore } from "../store/authStore";
@@ -69,6 +70,9 @@ export default function ChatLayout() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const [room, setRoom] = useState("");
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingEventRef = useRef<number>(0);
 
   const token = localStorage.getItem("token");
 
@@ -140,6 +144,13 @@ export default function ChatLayout() {
     ws.current.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
+        
+        // Handle typing events
+        if (payload.type === "typing") {
+          setTypingUsers(payload.users || []);
+          return;
+        }
+        
         if (payload.type === "rate_limit") return;
 
         const nextMessage = normalizeChatMessage({
@@ -215,8 +226,55 @@ export default function ChatLayout() {
 
   const send = () => {
     if (!message.trim() || ws.current?.readyState !== WebSocket.OPEN) return;
-    ws.current.send(message);
+    
+    // Send message as JSON structure
+    ws.current.send(
+      JSON.stringify({
+        type: "message",
+        content: message,
+      })
+    );
+    
     setMessage("");
+    
+    // Clear typing status when message is sent
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+  };
+
+  const handleMessageInput = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const text = e.target.value;
+    setMessage(text);
+
+    // Send typing event with debounce (max once per 300ms)
+    const now = Date.now();
+    if (ws.current?.readyState === WebSocket.OPEN) {
+      if (now - lastTypingEventRef.current > 300) {
+        ws.current.send(
+          JSON.stringify({
+            type: "typing",
+          })
+        );
+        lastTypingEventRef.current = now;
+      }
+    }
+
+    // Reset timeout every keystroke
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Auto-clear typing after 5 seconds of inactivity
+    typingTimeoutRef.current = setTimeout(() => {
+      if (ws.current?.readyState === WebSocket.OPEN) {
+        ws.current.send(
+          JSON.stringify({
+            type: "stop_typing",
+          })
+        );
+      }
+    }, 5000);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -340,6 +398,7 @@ export default function ChatLayout() {
               onDeleteMessage={handleDeleteMessage}
               isLoading={isLoadingMessages}
             />
+            <TypingIndicator typingUsers={typingUsers} currentUsername={username} />
             <div className="chat-input border-t border-border">
               <div className="chat-input-wrapper">
                 <input
@@ -385,7 +444,7 @@ export default function ChatLayout() {
                   type="text"
                   placeholder={`Message ${room ? "#" + room : "..."}`}
                   value={message}
-                  onChange={(e) => setMessage(e.target.value)}
+                  onChange={handleMessageInput}
                   onKeyDown={handleKeyDown}
                   autoComplete="off"
                 />
