@@ -14,16 +14,13 @@ export default function TypingIndicator({
 
   if (otherUsers.length === 0) return null;
 
-  const userList =
-    otherUsers.length === 1
-      ? otherUsers[0]
-      : otherUsers.length === 2
-        ? `${otherUsers[0]} and ${otherUsers[1]}`
-        : `${otherUsers.slice(0, -1).join(", ")}, and ${otherUsers[otherUsers.length - 1]}`;
+  const displayText = otherUsers.length === 1
+    ? `${otherUsers[0]} is typing`
+    : "Someone is typing";
 
   return (
     <div className="typing-indicator">
-      <span className="typing-text">{userList} is typing</span>
+      <span className="typing-text">{displayText}</span>
       <div className="typing-dots">
         <span></span>
         <span></span>

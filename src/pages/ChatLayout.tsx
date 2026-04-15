@@ -226,20 +226,26 @@ export default function ChatLayout() {
 
   const send = () => {
     if (!message.trim() || ws.current?.readyState !== WebSocket.OPEN) return;
-    
-    // Send message as JSON structure
+
     ws.current.send(
       JSON.stringify({
         type: "message",
         content: message,
       })
     );
-    
+
+    ws.current.send(
+      JSON.stringify({
+        type: "stop_typing",
+      })
+    );
+
     setMessage("");
-    
-    // Clear typing status when message is sent
+    setTypingUsers((prev) => prev.filter((u) => u !== username));
+
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
     }
   };
 
@@ -247,25 +253,38 @@ export default function ChatLayout() {
     const text = e.target.value;
     setMessage(text);
 
-    // Send typing event with debounce (max once per 300ms)
-    const now = Date.now();
-    if (ws.current?.readyState === WebSocket.OPEN) {
-      if (now - lastTypingEventRef.current > 300) {
-        ws.current.send(
-          JSON.stringify({
-            type: "typing",
-          })
-        );
-        lastTypingEventRef.current = now;
+    if (ws.current?.readyState !== WebSocket.OPEN) return;
+
+    if (!text.trim()) {
+      ws.current.send(
+        JSON.stringify({
+          type: "stop_typing",
+        })
+      );
+      setTypingUsers((prev) => prev.filter((u) => u !== username));
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
       }
+      return;
     }
 
-    // Reset timeout every keystroke
+    // Send typing event with debounce (max once per 300ms)
+    const now = Date.now();
+    if (now - lastTypingEventRef.current > 300) {
+      ws.current.send(
+        JSON.stringify({
+          type: "typing",
+        })
+      );
+      lastTypingEventRef.current = now;
+    }
+
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
-    // Auto-clear typing after 5 seconds of inactivity
     typingTimeoutRef.current = setTimeout(() => {
       if (ws.current?.readyState === WebSocket.OPEN) {
         ws.current.send(
@@ -274,6 +293,7 @@ export default function ChatLayout() {
           })
         );
       }
+      typingTimeoutRef.current = null;
     }, 5000);
   };
 
