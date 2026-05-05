@@ -40,6 +40,30 @@ const ServerSidebar = ({ getServer, server, parent }: ServerProps) => {
   const userId = decoded?.id || "";
   const userName = decoded?.sub || "";
 
+  const adminColorPalette = useMemo(
+    () => [
+      "#ef4444",
+      "#f59e0b",
+      "#22c55e",
+      "#06b6d4",
+      "#3b82f6",
+      "#8b5cf6",
+      "#ec4899",
+      "#f97316",
+      "#14b8a6",
+      "#84cc16",
+    ],
+    [],
+  );
+
+  const getStableAdminColor = (adminId: string) => {
+    let hash = 0;
+    for (let i = 0; i < adminId.length; i += 1) {
+      hash = (hash * 31 + adminId.charCodeAt(i)) >>> 0;
+    }
+    return adminColorPalette[hash % adminColorPalette.length];
+  };
+
   /* Close profile popover on outside click */
   useEffect(() => {
     if (!showProfile) return;
@@ -88,23 +112,43 @@ const ServerSidebar = ({ getServer, server, parent }: ServerProps) => {
 
       {/* ── Server list ── */}
       <div className="server-list">
-        {server?.map((s) => (
-          <button
-            key={s.id}
-            className={"server-item" + (activeId === s.id ? " active" : "")}
-            aria-label={s.name}
-            data-tooltip={s.name}
-            onClick={() => {
-              setActiveId(s.id);
-              if (typeof parent === "function") parent(s.id);
-            }}
-          >
-            <div className="server-avatar">
-              {s.name?.slice(0, 2)?.toUpperCase()}
-            </div>
-            <span className="server-tooltip">{s.name}</span>
-          </button>
-        ))}
+        {server?.map((s) => {
+          const isMyServer = s.admin_id === userId;
+          const adminColor = getStableAdminColor(s.admin_id || s.id);
+
+          return (
+            <button
+              key={s.id}
+              className={
+                "server-item" +
+                (activeId === s.id ? " active" : "") +
+                (isMyServer ? " own-admin" : "")
+              }
+              aria-label={s.name}
+              data-tooltip={isMyServer ? `${s.name} (Your server)` : s.name}
+              style={
+                isMyServer
+                  ? {
+                      ["--server-accent" as string]: "#22c55e",
+                      ["--server-shadow" as string]: "rgba(34, 197, 94, 0.4)",
+                    }
+                  : {
+                      ["--server-accent" as string]: adminColor,
+                      ["--server-shadow" as string]: `${adminColor}66`,
+                    }
+              }
+              onClick={() => {
+                setActiveId(s.id);
+                if (typeof parent === "function") parent(s.id);
+              }}
+            >
+              <div className="server-avatar">
+                {s.name?.slice(0, 2)?.toUpperCase()}
+              </div>
+              <span className="server-tooltip">{isMyServer ? `${s.name} • You` : s.name}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Add server button ── */}

@@ -8,9 +8,10 @@ import CreateRoomModal from "./CreateRoomModal";
 import ServerSettingsModal from "./ServerSettingsModal";
 import ChannelSettingsModal from "./ChannelSettingsModal";
 import JoinRequestsModal from "./JoinRequestsModal";
+import RoomMemberManagement from "./RoomMemberManagement";
 
 /* ─────────────────────────── types ─────────────────────────── */
-type Room = { name: string; id: string | number };
+type Room = { name: string; id: string | number; visibility?: "public" | "private" };
 type Server = { name: string; id: string; admin_id: string };
 
 type SidebarProps = {
@@ -45,6 +46,7 @@ export default function Sidebar({
   const [showJoinRequests, setShowJoinRequests] = useState(false);
   const [pendingCount, setPendingCount]         = useState(0);
   const [settingsRoom, setSettingsRoom]         = useState<Room | null>(null);
+  const [managingRoom, setManagingRoom]         = useState<Room | null>(null);
 
   const tokenString = getToken() || "";
 
@@ -63,6 +65,21 @@ export default function Sidebar({
   );
 
   const isAdmin = activeServer?.admin_id === currentUserId;
+
+  useEffect(() => {
+    if (!activeServerId) return;
+    const stillExists = server?.some((s) => s.id === activeServerId) ?? false;
+    if (stillExists) return;
+
+    setActiveServerId("");
+    setRooms([]);
+    setPendingCount(0);
+    setShowJoinRequests(false);
+    setShowServerSettings(false);
+    setSettingsRoom(null);
+    setManagingRoom(null);
+    onServerChange?.("");
+  }, [activeServerId, server, onServerChange]);
 
   /* ── Fetch rooms ── */
   const getRoom = useCallback(async () => {
@@ -86,25 +103,31 @@ export default function Sidebar({
 
   useEffect(() => { getRoom(); }, [getRoom]);
 
-  /* ── Poll join requests (admin only) ── */
-  useEffect(() => {
-    if (!activeServerId || !isAdmin) return;
-    let lastCount = 0;
-    const checkRequests = () => {
-      fetch(`${baseUrl}/join_requests/${activeServerId}`, options("GET", tokenString))
-        .then((res) => res.json())
-        .then((data) => {
-          if (!Array.isArray(data)) return;
-          if (data.length > lastCount) setShowJoinRequests(true);
-          lastCount = data.length;
-          setPendingCount(data.length);
-        })
-        .catch(console.error);
-    };
-    checkRequests();
-    const interval = setInterval(checkRequests, 5000);
-    return () => clearInterval(interval);
+  /* ── Fetch pending join requests count (admin only) ── */
+  const getPendingRequests = useCallback(async () => {
+    if (!activeServerId || !isAdmin || !tokenString) return;
+    try {
+      const res = await fetch(
+        `${baseUrl}/join_requests/${activeServerId}`,
+        options("GET", tokenString),
+      );
+      const data = await res.json();
+      // Count only "pending" status (not approved/declined)
+      const pending = Array.isArray(data) 
+        ? data.filter((req: Record<string, unknown>) => req.status === "pending").length 
+        : 0;
+      setPendingCount(pending);
+    } catch (err) {
+      console.error("Failed to fetch pending requests:", err);
+    }
   }, [activeServerId, isAdmin, tokenString]);
+
+  // Fetch pending count when server changes
+  useEffect(() => {
+    getPendingRequests();
+  }, [getPendingRequests]);
+
+  /* Removed: Join requests polling - now fetch on-demand or when server changes */
 
   /* ── Handlers ── */
   const handleServerSelect = (serverID: string) => {
@@ -151,7 +174,7 @@ export default function Sidebar({
                       onClick={() => setShowJoinRequests(true)}
                       className="sidebar-action-btn"
                       aria-label="Join Requests"
-                      title="Join Requests"
+                      title={`Join Requests (${pendingCount} pending)`}
                     >
                       <UsersIcon />
                       {pendingCount > 0 && (
@@ -252,22 +275,39 @@ export default function Sidebar({
                     className="channel-item-main"
                     onClick={() => onSelectRoom(room.name, room.id)}
                   >
-                    <span className="channel-hash">#</span>
+                    <span className={room.visibility === "private" ? "channel-lock" : "channel-hash"}>
+                      {room.visibility === "private" ? "🔒" : "#"}
+                    </span>
                     <span className="channel-name">{room.name}</span>
                   </div>
-                  {isAdmin && (
-                    <button
-                      className="channel-settings-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSettingsRoom(room);
-                      }}
-                      title="Edit Channel"
-                      aria-label={`Edit ${room.name}`}
-                    >
-                      <SmallGearIcon />
-                    </button>
-                  )}
+                  <div className="channel-item-actions">
+                    {isAdmin && room.visibility === "private" && (
+                      <button
+                        className="channel-action-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setManagingRoom(room);
+                        }}
+                        title="Manage Access"
+                        aria-label={`Manage access for ${room.name}`}
+                      >
+                        <UsersIcon />
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <button
+                        className="channel-action-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSettingsRoom(room);
+                        }}
+                        title="Edit Channel"
+                        aria-label={`Edit ${room.name}`}
+                      >
+                        <SmallGearIcon />
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))
             )}
@@ -314,6 +354,18 @@ export default function Sidebar({
         <JoinRequestsModal
           serverId={activeServerId}
           onClose={() => setShowJoinRequests(false)}
+          onRequestsUpdated={getPendingRequests}
+        />
+      )}
+      {managingRoom && activeServerId && (
+        <RoomMemberManagement
+          isOpen={!!managingRoom}
+          room={managingRoom}
+          serverId={activeServerId}
+          currentUserId={currentUserId}
+          isAdmin={isAdmin}
+          onClose={() => setManagingRoom(null)}
+          onMemberAdded={getRoom}
         />
       )}
     </aside>

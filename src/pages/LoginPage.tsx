@@ -2,23 +2,51 @@ import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { getToken, useAuthStore } from '../store/authStore';
 import { baseUrl } from '../helper/constant';
+import ErrorPage from './ErrorPage';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<{ field: string; msg: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const login = useAuthStore((s) => s.login);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+  // Check if already logged in
+  useEffect(() => {
+    if (getToken()) {
+      navigate('/chat');
+    }
+  }, [navigate]);
+
+  // Validate required fields
+  const validateForm = (): boolean => {
+    const errors: { field: string; msg: string }[] = [];
+
+    if (!username.trim()) {
+      errors.push({ field: "Username", msg: "Username is required" });
+    }
+    if (!password.trim()) {
+      errors.push({ field: "Password", msg: "Password is required" });
+    }
+
+    setValidationErrors(errors);
+    return errors.length === 0;
+  };
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    
+    // Validate before submission
+    if (!validateForm()) {
+      return;
+    }
+
     setError(null);
     setLoading(true);
-
-
 
     try {
       // /login uses OAuth2 form encoding (application/x-www-form-urlencoded)
@@ -51,12 +79,38 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
-  // console.log(getToken())
-  useEffect(() => {
-    if (getToken()) {
-      navigate('/chat');
-    }
-  }, []);
+
+  // Show error page if validation failed
+  if (validationErrors.length > 0) {
+    return (
+      <ErrorPage
+        title="Login Error"
+        message="Please fill in all required fields to continue."
+        errors={validationErrors}
+        onRetry={() => {
+          setValidationErrors([]);
+          setError(null);
+        }}
+        returnPath="/"
+      />
+    );
+  }
+
+  // Show error page if server error occurred
+  if (error) {
+    return (
+      <ErrorPage
+        title="Login Failed"
+        message={error}
+        errors={[]}
+        onRetry={() => {
+          setError(null);
+          setLoading(false);
+        }}
+        returnPath="/signup"
+      />
+    );
+  }
 
   return (
     <div className="login-page">

@@ -303,6 +303,62 @@
   box-shadow: 0 0 0 2px var(--crm-accent);
 }
 
+/* ── Visibility Picker (Private/Public) ── */
+.crm-visibility-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.crm-visibility-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: var(--crm-radius-sm);
+  background: var(--crm-type-bg);
+  border: 1.5px solid var(--crm-type-border);
+  color: var(--crm-type-color);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  outline: none;
+  text-align: left;
+}
+
+.crm-visibility-option:hover {
+  border-color: rgba(99, 102, 241, 0.2);
+  color: var(--crm-title-color);
+}
+
+.crm-visibility-option.active {
+  background: var(--crm-type-active-bg);
+  border-color: var(--crm-type-active-border);
+  color: var(--crm-type-active-color);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--crm-accent);
+}
+
+.crm-visibility-option:focus-visible {
+  box-shadow: 0 0 0 2px var(--crm-accent);
+}
+
+.crm-visibility-option svg {
+  width: 18px;
+  height: 18px;
+}
+
+.crm-visibility-desc {
+  font-size: 12px;
+  font-weight: 400;
+  color: inherit;
+  opacity: 0.8;
+  margin-top: 2px;
+}
+
 /* ── Fields ── */
 .crm-field {
   display: flex;

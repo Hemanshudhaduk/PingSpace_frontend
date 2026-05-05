@@ -10,12 +10,7 @@ const JoinPage    = lazy(() => import("./pages/JoinPage"));
 import ProtectedRoute from "./routes/ProtectedRoute";
 import AppLoader from "./components/Apploader";
 
-
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") {
-    fetch("https://pingspace-backend.onrender.com/health").catch(() => {});
-  }
-});
+/* Removed: Health check on tab visibility - unnecessary network traffic */
 
 const router = createBrowserRouter([
   { path: "/", element: <LoginPage /> },

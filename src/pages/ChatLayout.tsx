@@ -201,6 +201,7 @@ export default function ChatLayout() {
       const res = await fetch(`${baseUrl}/servers`, options("GET", token));
       if (!res.ok) return;
       const ans = await res.json();
+      // console.log("Fetched servers:", ans);
       setServer(Array.isArray(ans) ? ans : []);
     } catch (e) {
       console.error("Failed to fetch servers:", e);

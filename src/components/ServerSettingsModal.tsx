@@ -105,12 +105,12 @@ export default function ServerSettingsModal({
     }
   };
 
-  const handleKick = async (memberId: string) => {
+  const handleKick = async (su_id: string) => {
     if (!window.confirm("Remove this member from the server?")) return;
     try {
-      const res = await fetch(`${baseUrl}/server_users/${memberId}`, options("DELETE", token));
+      const res = await fetch(`${baseUrl}/server_users/${su_id}`, options("DELETE", token));
       if (!res.ok) throw new Error("Failed to remove member.");
-      setMembers((prev) => prev.filter((m) => m.id !== memberId));
+      setMembers((prev) => prev.filter((m) => m.id !== su_id));
     } catch (err: unknown) {
       setError((err as Error).message);
     }
@@ -259,7 +259,7 @@ export default function ServerSettingsModal({
                           </div>
                           <div className="ssm-member-text">
                             <div className="ssm-member-name">
-                              {m.username}
+                              {m.username && m.id === currentUserId ? `${m.username} (You)` : m.username}
                               {m.id === server.admin_id && " 👑"}
                             </div>
                             <div className="ssm-member-role">{m.role}</div>

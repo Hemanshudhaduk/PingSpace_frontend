@@ -218,15 +218,19 @@ a {
 .server-item:hover {
   border-radius: 30%;
   transform: translateY(-1px);
-  background: var(--accent2);
+  background: var(--server-accent, var(--accent2));
   color: #fff;
 }
 
 .server-item.active {
   border-radius: 30%;
-  background: var(--accent2);
+  background: var(--server-accent, var(--accent2));
   color: #fff;
-  box-shadow: 0 4px 16px rgba(88, 101, 242, 0.4);
+  box-shadow: 0 4px 16px var(--server-shadow, rgba(88, 101, 242, 0.4));
+}
+
+.server-item.own-admin {
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.35);
 }
 
 .server-item.home {
@@ -653,7 +657,8 @@ a {
   transition: background 0.12s ease, color 0.12s ease;
   display: flex;
   align-items: center;
-  gap: 0;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 15px;
   font-weight: 500;
   position: relative;
@@ -668,13 +673,20 @@ a {
   min-width: 0;
 }
 
-.channel-hash {
-  font-size: 18px;
+.channel-hash,
+.channel-lock {
+  font-size: 16px;
   color: var(--muted);
   line-height: 1;
   flex-shrink: 0;
   font-weight: 400;
   transition: color 0.12s;
+  width: 18px;
+  text-align: center;
+}
+
+.channel-lock {
+  font-size: 15px;
 }
 
 .channel-name {
@@ -693,27 +705,36 @@ a {
   color: var(--text);
 }
 
-/* Settings gear — visible only on hover */
-.channel-settings-btn {
+/* Actions container — shows buttons on hover */
+.channel-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.channel-item:hover .channel-item-actions {
+  opacity: 1;
+}
+
+/* Manage/Settings gear button */
+.channel-action-btn {
   background: transparent;
   border: none;
   color: var(--muted);
   cursor: pointer;
-  padding: 4px;
+  padding: 4px 6px;
   display: flex;
   align-items: center;
+  justify-content: center;
   border-radius: 4px;
-  opacity: 0;
-  transition: opacity 0.15s, color 0.15s, background 0.15s;
-  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
   outline: none;
 }
 
-.channel-item:hover .channel-settings-btn {
-  opacity: 1;
-}
-
-.channel-settings-btn:hover {
+.channel-action-btn:hover {
   color: var(--text);
   background: rgba(255, 255, 255, 0.08);
 }
@@ -722,7 +743,7 @@ a {
   background: rgba(0, 0, 0, 0.04);
 }
 
-[data-theme="light"] .channel-settings-btn:hover {
+[data-theme="light"] .channel-action-btn:hover {
   background: rgba(0, 0, 0, 0.06);
 }
 
@@ -736,7 +757,7 @@ a {
   color: var(--accent2);
 }
 
-.channel-item.active .channel-settings-btn {
+.channel-item.active .channel-item-actions {
   opacity: 1;
 }
 

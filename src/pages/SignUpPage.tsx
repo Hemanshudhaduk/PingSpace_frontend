@@ -2,27 +2,48 @@ import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { baseUrl } from "../helper/constant";
 import { options } from "../helper/fetchOptions";
+import ErrorPage from "./ErrorPage";
 
 export default function SignUpPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<{ field: string; msg: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const navigate = useNavigate();
 
+  // Validate required fields
+  const validateForm = (): boolean => {
+    const errors: { field: string; msg: string }[] = [];
+
+    if (!username.trim()) {
+      errors.push({ field: "Username", msg: "Username is required" });
+    }
+    if (!password.trim()) {
+      errors.push({ field: "Password", msg: "Password is required" });
+    }
+    if (!confirm.trim()) {
+      errors.push({ field: "Confirm Password", msg: "Please confirm your password" });
+    }
+    if (password && confirm && password !== confirm) {
+      errors.push({ field: "Password Match", msg: "Passwords do not match" });
+    }
+    if (password && password.length < 6) {
+      errors.push({ field: "Password Length", msg: "Password must be at least 6 characters" });
+    }
+
+    setValidationErrors(errors);
+    return errors.length === 0;
+  };
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setError(null);
 
-    if (password !== confirm) {
-      setError("Passwords do not match.");
-      return;
-    }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+    // Validate before submission
+    if (!validateForm()) {
       return;
     }
 
@@ -47,6 +68,38 @@ export default function SignUpPage() {
       setLoading(false);
     }
   };
+
+  // Show error page if validation failed
+  if (validationErrors.length > 0) {
+    return (
+      <ErrorPage
+        title="Sign Up Error"
+        message="Please fix the errors below to create your account."
+        errors={validationErrors}
+        onRetry={() => {
+          setValidationErrors([]);
+          setError(null);
+        }}
+        returnPath="/signup"
+      />
+    );
+  }
+
+  // Show error page if server error occurred
+  if (error) {
+    return (
+      <ErrorPage
+        title="Sign Up Failed"
+        message={error}
+        errors={[]}
+        onRetry={() => {
+          setError(null);
+          setLoading(false);
+        }}
+        returnPath="/signup"
+      />
+    );
+  }
 
   const strength = password.length === 0 ? 0 : password.length < 6 ? 1 : password.length < 10 ? 2 : 3;
   const strengthLabel = ["", "Weak", "Fair", "Strong"];
